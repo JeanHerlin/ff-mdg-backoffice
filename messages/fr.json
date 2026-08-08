@@ -1,0 +1,52 @@
+{
+  "server": {
+    "healthy": "Le serveur fonctionne correctement.",
+    "internal_error": "Une erreur interne est survenue.",
+    "route_not_found": "Cette route n'existe pas.",
+    "record_not_found": "Élément introuvable.",
+    "duplicate_entry": "Cet élément existe déjà."
+  },
+  "auth": {
+    "token_missing": "Vous devez être connecté pour accéder à cette ressource.",
+    "invalid_credentials": "Identifiants invalides.",
+    "forbidden": "Vous n'avez pas les droits nécessaires.",
+    "invalid_or_expired_token": "Ce lien est invalide ou a expiré.",
+    "email_not_verified": "Confirmez votre adresse email avant de vous connecter.",
+    "account_disabled": "Ce compte a été désactivé.",
+    "email_verified": "Votre email a été confirmé, vous pouvez vous connecter.",
+    "verification_email_sent": "Un email de confirmation a été envoyé si le compte existe.",
+    "logged_in": "Connexion réussie.",
+    "refreshed": "Session rafraîchie.",
+    "logged_out": "Déconnexion réussie.",
+    "reset_email_sent": "Un email de réinitialisation a été envoyé si le compte existe.",
+    "password_reset": "Mot de passe mis à jour."
+  },
+  "validation": {
+    "failed": "Certains champs sont invalides.",
+    "required": "Ce champ est requis.",
+    "email_invalid": "Adresse email invalide.",
+    "password_too_short": "Le mot de passe doit contenir au moins 8 caractères.",
+    "password_too_long": "Le mot de passe est trop long.",
+    "ff_player_id_invalid": "ID Free Fire invalide.",
+    "ff_pseudo_invalid": "Pseudo invalide.",
+    "display_name_invalid": "Nom affiché invalide.",
+    "display_name_too_long": "Nom affiché trop long.",
+    "avatar_invalid_type": "Format de photo non supporté (jpg, png ou webp uniquement)."
+  },
+  "users": {
+    "not_found": "Utilisateur introuvable.",
+    "fetched": "Utilisateurs récupérés.",
+    "updated": "Utilisateur mis à jour.",
+    "deactivated": "Compte désactivé.",
+    "deleted": "Compte supprimé.",
+    "email_taken": "Cet email est déjà utilisé.",
+    "ff_player_id_taken": "Cet ID Free Fire est déjà associé à un compte.",
+    "registered_check_email": "Compte créé — vérifiez vos emails pour l'activer.",
+    "admin_invited": "Invitation envoyée à l'administrateur."
+  },
+  "common": {
+    "loading": "Chargement…",
+    "error": "Une erreur est survenue.",
+    "retry": "Réessayer"
+  }
+}
