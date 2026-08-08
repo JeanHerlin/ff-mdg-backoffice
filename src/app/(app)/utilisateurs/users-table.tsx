@@ -34,10 +34,8 @@ const STATUS_LABEL: Record<string, string> = {
   REJECTED: "Rejeté",
 };
 
-const API_ORIGIN = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/api\/v1$/, "");
-
 function avatarSrc(url: string | null) {
-  return url ? `${API_ORIGIN}${url}` : null;
+  return url;
 }
 
 export function UsersTable() {

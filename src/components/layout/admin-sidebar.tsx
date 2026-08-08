@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
+  Shield,
   ShieldCheck,
   CalendarRange,
   Swords,
@@ -40,6 +41,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: "Communauté",
     items: [
       { href: "/utilisateurs", label: "Utilisateurs", icon: Users },
+      { href: "/equipes", label: "Équipes", icon: Shield },
       { href: "/verifications", label: "Vérifications", icon: ShieldCheck, permission: "verifications" },
     ],
   },
