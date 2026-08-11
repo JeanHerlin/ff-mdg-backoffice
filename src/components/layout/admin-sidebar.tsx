@@ -15,6 +15,7 @@ import {
   BarChart3,
   Megaphone,
   UserCog,
+  X,
 } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { useAuth, type BackofficePermission } from "@/lib/auth-context";
@@ -69,53 +70,102 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
-export function AdminSidebar() {
+function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { user, can } = useAuth();
 
   return (
-    <aside className="hidden w-64 shrink-0 border-r border-border bg-card md:flex md:flex-col">
-      <div className="flex h-16 items-center border-b border-border px-5">
-        <Logo />
-      </div>
+    <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-5">
+      {NAV_SECTIONS.map((section) => {
+        const items = section.items.filter((item) => {
+          if (item.superAdminOnly) return user?.role === "SUPER_ADMIN";
+          if (item.permission) return can(item.permission);
+          return true;
+        });
+        if (items.length === 0) return null;
 
-      <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-5">
-        {NAV_SECTIONS.map((section) => {
-          const items = section.items.filter((item) => {
-            if (item.superAdminOnly) return user?.role === "SUPER_ADMIN";
-            if (item.permission) return can(item.permission);
-            return true;
-          });
-          if (items.length === 0) return null;
-
-          return (
-            <div key={section.title}>
-              <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {section.title}
-              </p>
-              <div className="space-y-1">
-                {items.map((item) => {
-                  const active = pathname === item.href;
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={cn(
-                        "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-                        active && "bg-primary/10 text-primary"
-                      )}
-                    >
-                      <Icon className="size-4" />
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </div>
+        return (
+          <div key={section.title}>
+            <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {section.title}
+            </p>
+            <div className="space-y-1">
+              {items.map((item) => {
+                const active = pathname === item.href;
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={onNavigate}
+                    className={cn(
+                      "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                      active && "bg-primary/10 text-primary"
+                    )}
+                  >
+                    <Icon className="size-4" />
+                    {item.label}
+                  </Link>
+                );
+              })}
             </div>
-          );
-        })}
-      </nav>
-    </aside>
+          </div>
+        );
+      })}
+    </nav>
+  );
+}
+
+interface AdminSidebarProps {
+  mobileOpen: boolean;
+  onMobileClose: () => void;
+}
+
+export function AdminSidebar({ mobileOpen, onMobileClose }: AdminSidebarProps) {
+  return (
+    <>
+      {/* Desktop — toujours visible */}
+      <aside className="hidden w-64 shrink-0 border-r border-border bg-card md:flex md:flex-col">
+        <div className="flex h-16 items-center border-b border-border px-5">
+          <Logo />
+        </div>
+        <SidebarNav />
+      </aside>
+
+      {/* Mobile — tiroir plein écran déclenché depuis la topbar */}
+      <div
+        className={cn(
+          "fixed inset-0 z-50 md:hidden",
+          mobileOpen ? "pointer-events-auto" : "pointer-events-none"
+        )}
+        aria-hidden={!mobileOpen}
+      >
+        <div
+          className={cn(
+            "absolute inset-0 bg-black/50 transition-opacity",
+            mobileOpen ? "opacity-100" : "opacity-0"
+          )}
+          onClick={onMobileClose}
+        />
+        <div
+          className={cn(
+            "absolute left-0 top-0 flex h-full w-72 max-w-[85vw] flex-col border-r border-border bg-card shadow-xl transition-transform duration-300",
+            mobileOpen ? "translate-x-0" : "-translate-x-full"
+          )}
+        >
+          <div className="flex h-16 items-center justify-between border-b border-border px-5">
+            <Logo />
+            <button
+              onClick={onMobileClose}
+              className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              aria-label="Fermer le menu"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+          <SidebarNav onNavigate={onMobileClose} />
+        </div>
+      </div>
+    </>
   );
 }
