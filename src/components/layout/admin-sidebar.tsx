@@ -7,6 +7,7 @@ import {
   Users,
   Shield,
   ShieldCheck,
+  ShieldAlert,
   CalendarRange,
   Swords,
   Trophy,
@@ -43,6 +44,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/utilisateurs", label: "Utilisateurs", icon: Users },
       { href: "/equipes", label: "Équipes", icon: Shield },
       { href: "/verifications", label: "Vérifications", icon: ShieldCheck, permission: "verifications" },
+      { href: "/signalements", label: "Signalements", icon: ShieldAlert, permission: "signalements" },
     ],
   },
   {

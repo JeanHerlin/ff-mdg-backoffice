@@ -5,6 +5,7 @@ import { apiRequest, setAccessToken, tryRefresh } from "./api-client";
 
 export type BackofficePermission =
   | "verifications"
+  | "signalements"
   | "saisons"
   | "scrims"
   | "ligues"

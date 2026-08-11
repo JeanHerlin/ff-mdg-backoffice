@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Search, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, Loader2, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -38,7 +38,10 @@ function avatarSrc(url: string | null) {
   return url;
 }
 
+type Tab = "verified" | "unverified";
+
 export function UsersTable() {
+  const [tab, setTab] = useState<Tab>("verified");
   const [items, setItems] = useState<PlayerUser[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -47,13 +50,21 @@ export function UsersTable() {
   const [selected, setSelected] = useState<PlayerUser | null>(null);
   const [statusTarget, setStatusTarget] = useState<PlayerUser | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PlayerUser | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const endpoint = tab === "verified" ? "/users" : "/users/unverified";
+
+  useEffect(() => {
+    setPage(1);
+  }, [tab]);
 
   useEffect(() => {
     const handle = setTimeout(() => {
       setLoading(true);
       const params = new URLSearchParams({ page: String(page), perPage: "10" });
       if (search) params.set("search", search);
-      apiRequestWithMeta<PlayerUser[]>(`/users?${params}`)
+      apiRequestWithMeta<PlayerUser[]>(`${endpoint}?${params}`)
         .then(({ data, meta }) => {
           setItems(data ?? []);
           setTotalPages(meta?.totalPages ?? 1);
@@ -61,7 +72,7 @@ export function UsersTable() {
         .finally(() => setLoading(false));
     }, 300);
     return () => clearTimeout(handle);
-  }, [page, search]);
+  }, [page, search, endpoint]);
 
   async function confirmToggleActive() {
     if (!statusTarget) return;
@@ -82,9 +93,43 @@ export function UsersTable() {
     }
   }
 
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    const user = deleteTarget;
+    setDeletingId(user.id);
+    try {
+      await apiRequest(`/users/unverified/${user.id}`, { method: "DELETE" });
+      setItems((prev) => prev.filter((u) => u.id !== user.id));
+      setSelected((prev) => (prev && prev.id === user.id ? null : prev));
+    } finally {
+      setDeletingId(null);
+      setDeleteTarget(null);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex rounded-lg border border-border p-1">
+          <button
+            type="button"
+            onClick={() => setTab("verified")}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              tab === "verified" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Email vérifié
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("unverified")}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              tab === "unverified" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Email non vérifié
+          </button>
+        </div>
         <div className="relative max-w-sm flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -99,6 +144,14 @@ export function UsersTable() {
         </div>
       </div>
 
+      {tab === "unverified" && (
+        <p className="text-xs text-muted-foreground">
+          Ces comptes n'ont jamais confirmé leur email — ils ne peuvent pas se connecter. Ils sont
+          supprimés automatiquement 3 jours après l'inscription ; vous pouvez aussi les supprimer
+          manuellement ici.
+        </p>
+      )}
+
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -107,8 +160,14 @@ export function UsersTable() {
                 <th className="px-4 py-3 font-medium">Joueur</th>
                 <th className="px-4 py-3 font-medium">Email</th>
                 <th className="px-4 py-3 font-medium">ID Free Fire</th>
-                <th className="px-4 py-3 font-medium">Vérification</th>
-                <th className="px-4 py-3 font-medium">Statut</th>
+                {tab === "verified" ? (
+                  <>
+                    <th className="px-4 py-3 font-medium">Vérification</th>
+                    <th className="px-4 py-3 font-medium">Statut</th>
+                  </>
+                ) : (
+                  <th className="px-4 py-3 font-medium" />
+                )}
                 <th className="px-4 py-3 font-medium">Inscrit le</th>
               </tr>
             </thead>
@@ -129,8 +188,10 @@ export function UsersTable() {
                 items.map((user) => (
                   <tr
                     key={user.id}
-                    onClick={() => setSelected(user)}
-                    className="cursor-pointer border-b border-border last:border-0 hover:bg-muted/40"
+                    onClick={() => tab === "verified" && setSelected(user)}
+                    className={`border-b border-border last:border-0 hover:bg-muted/40 ${
+                      tab === "verified" ? "cursor-pointer" : ""
+                    }`}
                   >
                     <td className="flex items-center gap-2.5 px-4 py-3">
                       <Avatar url={avatarSrc(user.avatarUrl)} label={user.playerProfile?.ffPseudo ?? "?"} />
@@ -145,18 +206,41 @@ export function UsersTable() {
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{user.email}</td>
                     <td className="px-4 py-3 text-muted-foreground">{user.playerProfile?.ffPlayerId ?? "—"}</td>
-                    <td className="px-4 py-3">
-                      {user.playerProfile && (
-                        <Badge variant={user.playerProfile.verificationStatus === "VERIFIED" ? "default" : "muted"}>
-                          {STATUS_LABEL[user.playerProfile.verificationStatus]}
-                        </Badge>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant={user.isActive ? "default" : "accent"}>
-                        {user.isActive ? "Actif" : "Désactivé"}
-                      </Badge>
-                    </td>
+                    {tab === "verified" ? (
+                      <>
+                        <td className="px-4 py-3">
+                          {user.playerProfile && (
+                            <Badge variant={user.playerProfile.verificationStatus === "VERIFIED" ? "default" : "muted"}>
+                              {STATUS_LABEL[user.playerProfile.verificationStatus]}
+                            </Badge>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge variant={user.isActive ? "default" : "accent"}>
+                            {user.isActive ? "Actif" : "Désactivé"}
+                          </Badge>
+                        </td>
+                      </>
+                    ) : (
+                      <td className="px-4 py-3">
+                        <Button
+                          size="sm"
+                          variant="accent"
+                          disabled={deletingId === user.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteTarget(user);
+                          }}
+                        >
+                          {deletingId === user.id ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="size-4" />
+                          )}
+                          Supprimer
+                        </Button>
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-muted-foreground">
                       {new Date(user.createdAt).toLocaleDateString("fr-FR")}
                     </td>
@@ -250,6 +334,17 @@ export function UsersTable() {
         variant={statusTarget?.isActive ? "accent" : "default"}
         loading={togglingId === statusTarget?.id}
         onConfirm={confirmToggleActive}
+      />
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Supprimer ce compte non vérifié ?"
+        description={`Le compte ${deleteTarget?.email} sera définitivement supprimé. Cette action est irréversible.`}
+        confirmLabel="Supprimer"
+        variant="accent"
+        loading={deletingId === deleteTarget?.id}
+        onConfirm={confirmDelete}
       />
     </div>
   );

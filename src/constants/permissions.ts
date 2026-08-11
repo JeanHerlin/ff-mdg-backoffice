@@ -2,6 +2,7 @@ import type { BackofficePermission } from "@/lib/auth-context";
 
 export const BACKOFFICE_PERMISSIONS: BackofficePermission[] = [
   "verifications",
+  "signalements",
   "saisons",
   "scrims",
   "ligues",
@@ -12,6 +13,7 @@ export const BACKOFFICE_PERMISSIONS: BackofficePermission[] = [
 
 export const PERMISSION_LABEL: Record<BackofficePermission, string> = {
   verifications: "Vérifications",
+  signalements: "Signalements",
   saisons: "Saisons",
   scrims: "Scrims",
   ligues: "Ligues & tournois",
