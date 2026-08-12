@@ -20,6 +20,7 @@ import {
 import { Logo } from "@/components/logo";
 import { useAuth, type BackofficePermission } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
+import type { PendingCounts } from "./admin-shell";
 
 interface NavItem {
   href: string;
@@ -27,6 +28,7 @@ interface NavItem {
   icon: typeof LayoutDashboard;
   permission?: BackofficePermission;
   superAdminOnly?: boolean;
+  countKey?: keyof PendingCounts;
 }
 
 interface NavSection {
@@ -44,8 +46,8 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/utilisateurs", label: "Utilisateurs", icon: Users },
       { href: "/equipes", label: "Équipes", icon: Shield },
-      { href: "/verifications", label: "Vérifications", icon: ShieldCheck, permission: "verifications" },
-      { href: "/signalements", label: "Signalements", icon: ShieldAlert, permission: "signalements" },
+      { href: "/verifications", label: "Vérifications", icon: ShieldCheck, permission: "verifications", countKey: "verifications" },
+      { href: "/signalements", label: "Signalements", icon: ShieldAlert, permission: "signalements", countKey: "signalements" },
     ],
   },
   {
@@ -54,7 +56,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/saisons", label: "Saisons", icon: CalendarRange, permission: "saisons" },
       { href: "/scrims", label: "Scrims", icon: Swords, permission: "scrims" },
       { href: "/ligues", label: "Ligues & tournois", icon: Trophy, permission: "ligues" },
-      { href: "/mercato", label: "Mercato", icon: ArrowLeftRight, permission: "mercato" },
+      { href: "/mercato", label: "Mercato", icon: ArrowLeftRight, permission: "mercato", countKey: "mercato" },
     ],
   },
   {
@@ -70,7 +72,7 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
-function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarNav({ onNavigate, counts }: { onNavigate?: () => void; counts: PendingCounts | null }) {
   const pathname = usePathname();
   const { user, can } = useAuth();
 
@@ -93,6 +95,7 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
               {items.map((item) => {
                 const active = pathname === item.href;
                 const Icon = item.icon;
+                const count = item.countKey ? counts?.[item.countKey] : undefined;
                 return (
                   <Link
                     key={item.href}
@@ -104,7 +107,12 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
                     )}
                   >
                     <Icon className="size-4" />
-                    {item.label}
+                    <span className="flex-1">{item.label}</span>
+                    {!!count && (
+                      <span className="flex size-5 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-accent-foreground">
+                        {count > 9 ? "9+" : count}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
@@ -119,9 +127,10 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 interface AdminSidebarProps {
   mobileOpen: boolean;
   onMobileClose: () => void;
+  counts: PendingCounts | null;
 }
 
-export function AdminSidebar({ mobileOpen, onMobileClose }: AdminSidebarProps) {
+export function AdminSidebar({ mobileOpen, onMobileClose, counts }: AdminSidebarProps) {
   return (
     <>
       {/* Desktop — toujours visible */}
@@ -129,7 +138,7 @@ export function AdminSidebar({ mobileOpen, onMobileClose }: AdminSidebarProps) {
         <div className="flex h-16 items-center border-b border-border px-5">
           <Logo />
         </div>
-        <SidebarNav />
+        <SidebarNav counts={counts} />
       </aside>
 
       {/* Mobile — tiroir plein écran déclenché depuis la topbar */}
@@ -163,7 +172,7 @@ export function AdminSidebar({ mobileOpen, onMobileClose }: AdminSidebarProps) {
               <X className="size-4" />
             </button>
           </div>
-          <SidebarNav onNavigate={onMobileClose} />
+          <SidebarNav onNavigate={onMobileClose} counts={counts} />
         </div>
       </div>
     </>
