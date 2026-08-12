@@ -75,40 +75,56 @@ function Avatar({ url, label, large }: { url: string | null; label: string; larg
 
 export function VerificationsTable() {
   const [tab, setTab] = useState<Tab>("teams");
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    setSearch("");
+  }, [tab]);
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex rounded-lg border border-border p-1">
-        <button
-          type="button"
-          onClick={() => setTab("teams")}
-          className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-            tab === "teams" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Équipes en attente
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("players")}
-          className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-            tab === "players" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Joueurs en attente
-        </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex rounded-lg border border-border p-1">
+          <button
+            type="button"
+            onClick={() => setTab("teams")}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              tab === "teams" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Équipes en attente
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("players")}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              tab === "players" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Joueurs en attente
+          </button>
+        </div>
+
+        <div className="relative max-w-sm flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder={tab === "teams" ? "Rechercher (nom, tag...)" : "Rechercher (pseudo, ID Free Fire...)"}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
       </div>
 
-      {tab === "teams" ? <PendingTeams /> : <PendingPlayers />}
+      {tab === "teams" ? <PendingTeams search={search} /> : <PendingPlayers search={search} />}
     </div>
   );
 }
 
-function PendingTeams() {
+function PendingTeams({ search }: { search: string }) {
   const [items, setItems] = useState<TeamSummary[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<TeamDetail | null>(null);
@@ -126,6 +142,10 @@ function PendingTeams() {
       })
       .finally(() => setLoading(false));
   }
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
 
   useEffect(() => {
     const handle = setTimeout(reload, 300);
@@ -156,19 +176,6 @@ function PendingTeams() {
 
   return (
     <>
-      <div className="relative max-w-sm">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Rechercher (nom, tag...)"
-          value={search}
-          onChange={(e) => {
-            setPage(1);
-            setSearch(e.target.value);
-          }}
-          className="pl-9"
-        />
-      </div>
-
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -301,11 +308,10 @@ function PendingTeams() {
   );
 }
 
-function PendingPlayers() {
+function PendingPlayers({ search }: { search: string }) {
   const [items, setItems] = useState<PlayerUser[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<PlayerUser | null>(null);
   const [confirmAction, setConfirmAction] = useState<"VERIFIED" | "REJECTED" | null>(null);
@@ -322,6 +328,10 @@ function PendingPlayers() {
       })
       .finally(() => setLoading(false));
   }
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
 
   useEffect(() => {
     const handle = setTimeout(reload, 300);
@@ -344,19 +354,6 @@ function PendingPlayers() {
 
   return (
     <>
-      <div className="relative max-w-sm">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Rechercher (pseudo, ID Free Fire...)"
-          value={search}
-          onChange={(e) => {
-            setPage(1);
-            setSearch(e.target.value);
-          }}
-          className="pl-9"
-        />
-      </div>
-
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
