@@ -58,7 +58,7 @@ export function TeamsTable() {
 
   function reload() {
     setLoading(true);
-    const params = new URLSearchParams({ page: String(page), perPage: "10" });
+    const params = new URLSearchParams({ page: String(page), perPage: "10", status: "CERTIFIED" });
     if (search) params.set("search", search);
     apiRequestWithMeta<TeamSummary[]>(`/teams?${params}`)
       .then(({ data, meta }) => {

@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, Loader2, Search, ShieldCheck, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Loader2, Search, ShieldCheck, Trash2, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { apiRequestWithMeta, apiRequest } from "@/lib/api-client";
+import { apiRequestWithMeta, apiRequest, ApiError } from "@/lib/api-client";
 
 type Tab = "teams" | "players";
 
@@ -129,6 +129,7 @@ function PendingTeams({ search }: { search: string }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<TeamDetail | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
   const [resolving, setResolving] = useState(false);
 
   function reload() {
@@ -167,6 +168,19 @@ function PendingTeams({ search }: { search: string }) {
     try {
       await apiRequest(`/teams/${selectedId}/certify`, { method: "POST" });
       setConfirmOpen(false);
+      setSelectedId(null);
+      reload();
+    } finally {
+      setResolving(false);
+    }
+  }
+
+  async function reject() {
+    if (!selectedId) return;
+    setResolving(true);
+    try {
+      await apiRequest(`/teams/${selectedId}/reject`, { method: "POST" });
+      setRejectOpen(false);
       setSelectedId(null);
       reload();
     } finally {
@@ -285,10 +299,16 @@ function PendingTeams({ search }: { search: string }) {
               </div>
             </div>
 
-            <Button className="mt-2 gap-1.5" onClick={() => setConfirmOpen(true)}>
-              <ShieldCheck className="size-4" />
-              Certifier cette équipe
-            </Button>
+            <div className="mt-2 flex gap-2">
+              <Button variant="accent" className="gap-1.5" onClick={() => setRejectOpen(true)}>
+                <Trash2 className="size-4" />
+                Supprimer
+              </Button>
+              <Button className="flex-1 gap-1.5" onClick={() => setConfirmOpen(true)}>
+                <ShieldCheck className="size-4" />
+                Certifier cette équipe
+              </Button>
+            </div>
           </div>
         ) : (
           <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
@@ -304,6 +324,17 @@ function PendingTeams({ search }: { search: string }) {
         loading={resolving}
         onConfirm={certify}
       />
+
+      <ConfirmDialog
+        open={rejectOpen}
+        onOpenChange={setRejectOpen}
+        title="Supprimer cette équipe ?"
+        description={`${selected?.name ?? "Cette équipe"} sera définitivement supprimée et le capitaine sera notifié par email. Cette action est irréversible.`}
+        confirmLabel="Supprimer"
+        variant="accent"
+        loading={resolving}
+        onConfirm={reject}
+      />
     </>
   );
 }
@@ -315,6 +346,9 @@ function PendingPlayers({ search }: { search: string }) {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<PlayerUser | null>(null);
   const [confirmAction, setConfirmAction] = useState<"VERIFIED" | "REJECTED" | null>(null);
+  const [editFfPseudo, setEditFfPseudo] = useState("");
+  const [editFfPlayerId, setEditFfPlayerId] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
 
   function reload() {
@@ -342,11 +376,24 @@ function PendingPlayers({ search }: { search: string }) {
   async function resolve(status: "VERIFIED" | "REJECTED") {
     if (!selected) return;
     setResolving(true);
+    setError(null);
     try {
-      await apiRequest(`/users/${selected.id}/verification`, { method: "PATCH", body: { status } });
+      await apiRequest(`/users/${selected.id}/verification`, {
+        method: "PATCH",
+        body:
+          status === "VERIFIED"
+            ? { status, ffPseudo: editFfPseudo.trim(), ffPlayerId: editFfPlayerId.trim() }
+            : { status },
+      });
       setConfirmAction(null);
       setSelected(null);
       reload();
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.message === "users.ff_player_id_taken"
+          ? "Cet ID Free Fire est déjà associé à un autre compte."
+          : "Une erreur est survenue, réessayez."
+      );
     } finally {
       setResolving(false);
     }
@@ -394,6 +441,7 @@ function PendingPlayers({ search }: { search: string }) {
                           variant="outline"
                           onClick={() => {
                             setSelected(player);
+                            setError(null);
                             setConfirmAction("REJECTED");
                           }}
                         >
@@ -404,6 +452,9 @@ function PendingPlayers({ search }: { search: string }) {
                           size="sm"
                           onClick={() => {
                             setSelected(player);
+                            setEditFfPseudo(player.playerProfile?.ffPseudo ?? "");
+                            setEditFfPlayerId(player.playerProfile?.ffPlayerId ?? "");
+                            setError(null);
                             setConfirmAction("VERIFIED");
                           }}
                         >
@@ -445,19 +496,39 @@ function PendingPlayers({ search }: { search: string }) {
           if (!open) {
             setConfirmAction(null);
             setSelected(null);
+            setError(null);
           }
         }}
         title={confirmAction === "VERIFIED" ? "Valider ce pseudo ?" : "Rejeter ce pseudo ?"}
         description={
           confirmAction === "VERIFIED"
-            ? `${selected?.playerProfile?.ffPseudo} sera marqué comme vérifié et comptera dans les quotas nécessitant des joueurs vérifiés.`
-            : `${selected?.playerProfile?.ffPseudo} sera marqué comme rejeté — le pseudo déclaré ne correspond pas à l'ID Free Fire fourni.`
+            ? "Vérifiez le pseudo et l'ID Free Fire dans le jeu — corrigez-les ici si besoin avant de valider."
+            : `Le compte de ${selected?.playerProfile?.ffPseudo ?? "ce joueur"} sera définitivement supprimé — le pseudo déclaré ne correspond pas à l'ID Free Fire fourni. Le joueur pourra se réinscrire avec les bonnes informations.`
         }
-        confirmLabel={confirmAction === "VERIFIED" ? "Valider" : "Rejeter"}
+        confirmLabel={confirmAction === "VERIFIED" ? "Valider" : "Rejeter et supprimer"}
         variant={confirmAction === "REJECTED" ? "accent" : "default"}
         loading={resolving}
+        disabled={confirmAction === "VERIFIED" && (!editFfPseudo.trim() || !editFfPlayerId.trim())}
         onConfirm={() => confirmAction && resolve(confirmAction)}
-      />
+      >
+        {confirmAction === "VERIFIED" && (
+          <div className="flex flex-col gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Pseudo Free Fire
+              </label>
+              <Input value={editFfPseudo} onChange={(e) => setEditFfPseudo(e.target.value)} maxLength={30} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                ID Free Fire
+              </label>
+              <Input value={editFfPlayerId} onChange={(e) => setEditFfPlayerId(e.target.value)} maxLength={20} />
+            </div>
+          </div>
+        )}
+        {error && <p className="mt-2 text-xs text-accent">{error}</p>}
+      </ConfirmDialog>
     </>
   );
 }
