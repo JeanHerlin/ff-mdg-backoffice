@@ -94,19 +94,36 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   return data;
 }
 
-export async function tryRefresh(): Promise<boolean> {
-  try {
-    const envelope = await rawRequest<{ accessToken: string }>("/auth/refresh", {
-      method: "POST",
-      skipAuthRetry: true,
-    });
-    if (envelope.success && envelope.data) {
-      setAccessToken(envelope.data.accessToken);
-      return true;
+// Le refresh token est tourné (invalidé et remplacé) à chaque appel réussi
+// côté serveur. Sans mutualisation, deux appels concurrents (très courant :
+// plusieurs composants font leur propre fetch authentifié au montage) envoient
+// chacun l'ancien cookie ; le premier gagne et tourne le token, le second se
+// fait alors rejeter et efface un access token pourtant valide. On ne garde
+// donc jamais plus d'un /auth/refresh en vol — tous les appelants attendent
+// la même promesse.
+let refreshInFlight: Promise<boolean> | null = null;
+
+export function tryRefresh(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = (async () => {
+    try {
+      const envelope = await rawRequest<{ accessToken: string }>("/auth/refresh", {
+        method: "POST",
+        skipAuthRetry: true,
+      });
+      if (envelope.success && envelope.data) {
+        setAccessToken(envelope.data.accessToken);
+        return true;
+      }
+    } catch {
+      // pas de session valide
     }
-  } catch {
-    // pas de session valide
-  }
-  setAccessToken(null);
-  return false;
+    setAccessToken(null);
+    return false;
+  })().finally(() => {
+    refreshInFlight = null;
+  });
+
+  return refreshInFlight;
 }
