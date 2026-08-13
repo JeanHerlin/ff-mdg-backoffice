@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Loader2, Pencil, Trash2, UserX } from "lucide-react";
+import { Loader2, Pencil, Timer, Trash2, UserX } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,8 @@ interface ScrimDetailData {
   teamsPerLobby: number;
   lobbyMax: number;
   phase: Phase;
+  registrationOpen: boolean;
+  checkinOpen: boolean;
 }
 
 interface BoardTeamEntry {
@@ -61,6 +63,34 @@ const PHASE_VARIANT: Record<Phase, "default" | "muted" | "accent" | "outline"> =
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+// Décompte calculé côté client à partir de l'horodatage de fermeture — bascule
+// immédiate à zéro, sans attendre le prochain sondage serveur.
+function useCountdown(targetIso: string | null) {
+  const [remainingMs, setRemainingMs] = useState(() => (targetIso ? new Date(targetIso).getTime() - Date.now() : 0));
+
+  useEffect(() => {
+    if (!targetIso) {
+      setRemainingMs(0);
+      return;
+    }
+    const tick = () => setRemainingMs(new Date(targetIso).getTime() - Date.now());
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [targetIso]);
+
+  return remainingMs;
+}
+
+function formatCountdown(ms: number) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
 function toDatetimeLocalValue(iso: string) {
@@ -158,10 +188,36 @@ export function ScrimDetail() {
   useEffect(loadScrim, [loadScrim]);
   useEffect(loadBoard, [loadBoard]);
 
+  // Sondage rapproché pour suivre les inscriptions/check-in quasi en direct.
   useEffect(() => {
-    const interval = setInterval(loadBoard, 10000);
+    const interval = setInterval(() => {
+      loadScrim();
+      loadBoard();
+    }, 3000);
     return () => clearInterval(interval);
-  }, [loadBoard]);
+  }, [loadScrim, loadBoard]);
+
+  const registrationRemaining = useCountdown(scrim?.registrationOpen ? scrim.registrationClosesAt : null);
+  const checkinRemaining = useCountdown(scrim?.checkinOpen ? scrim.checkinClosesAt : null);
+  const registrationOpenNow = !!scrim?.registrationOpen && registrationRemaining > 0;
+  const checkinOpenNow = !!scrim?.checkinOpen && checkinRemaining > 0;
+
+  const wasRegistrationOpen = useRef(registrationOpenNow);
+  const wasCheckinOpen = useRef(checkinOpenNow);
+  useEffect(() => {
+    if (wasRegistrationOpen.current && !registrationOpenNow) {
+      loadScrim();
+      loadBoard();
+    }
+    wasRegistrationOpen.current = registrationOpenNow;
+  }, [registrationOpenNow, loadScrim, loadBoard]);
+  useEffect(() => {
+    if (wasCheckinOpen.current && !checkinOpenNow) {
+      loadScrim();
+      loadBoard();
+    }
+    wasCheckinOpen.current = checkinOpenNow;
+  }, [checkinOpenNow, loadScrim, loadBoard]);
 
   async function toggleNoShow(registrationId: string, isCurrentlyNoShow: boolean) {
     setBusyRegistrationId(registrationId);
@@ -221,6 +277,17 @@ export function ScrimDetail() {
             <Badge variant={PHASE_VARIANT[scrim.phase]}>{PHASE_LABEL[scrim.phase]}</Badge>
           </div>
           {scrim.description && <p className="mt-1 max-w-xl text-sm text-muted-foreground">{scrim.description}</p>}
+          {(registrationOpenNow || checkinOpenNow) && (
+            <div className="mt-2 flex w-fit items-center gap-2 rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-accent">
+              <Timer className="size-4" />
+              <span className="text-sm font-medium">
+                {registrationOpenNow ? "Fermeture des inscriptions dans" : "Fermeture du check-in dans"}{" "}
+                <span className="font-mono tabular-nums">
+                  {formatCountdown(registrationOpenNow ? registrationRemaining : checkinRemaining)}
+                </span>
+              </span>
+            </div>
+          )}
         </div>
         <div className="flex gap-2">
           {scrim.phase === "UPCOMING" && (
