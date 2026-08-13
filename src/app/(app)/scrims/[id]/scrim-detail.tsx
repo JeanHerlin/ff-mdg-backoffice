@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Loader2, Pencil, Timer, Trash2, UserX } from "lucide-react";
+import { Loader2, Mail, Pencil, ShieldCheck, Timer, Trash2, UserX } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +12,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { apiRequest, ApiError } from "@/lib/api-client";
 
 type Phase = "UPCOMING" | "REGISTRATION_OPEN" | "WAITING" | "CHECKIN_OPEN" | "CHECKIN_CLOSED" | "STARTED";
+type RoomType = "STANDARD" | "LEAGUE";
 
 interface ScrimDetailData {
   id: string;
@@ -29,17 +30,25 @@ interface ScrimDetailData {
   checkinOpen: boolean;
 }
 
+interface Room {
+  roomType: RoomType;
+  roomId: string;
+  roomPassword: string;
+}
+
 interface BoardTeamEntry {
   registrationId: string;
   team: { id: string; name: string; tag: string; logoUrl: string | null };
   checkedInCount: number;
   validatedAt: string | null;
+  forceValidated: boolean;
 }
 
 interface BoardData {
-  lobbies: { lobbyNumber: number; teams: BoardTeamEntry[] }[];
+  lobbies: { lobbyNumber: number; teams: BoardTeamEntry[]; room?: Room | null }[];
   sub: BoardTeamEntry[];
-  pending: BoardTeamEntry[];
+  partial: BoardTeamEntry[];
+  notCheckedIn: BoardTeamEntry[];
   noShow: BoardTeamEntry[];
 }
 
@@ -123,29 +132,62 @@ function TeamLabel({ team }: { team: BoardTeamEntry["team"] }) {
   );
 }
 
-function TeamRow({
+function InfoBlock({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-sm text-foreground">{value}</p>
+    </div>
+  );
+}
+
+// Ligne d'équipe validée (lobby ou SUB) — absence + envoi des identifiants
+// vers un ou plusieurs lobby (un SUB n'est rattaché à aucun lobby précis tant
+// qu'il n'y est pas promu, d'où la liste de cibles).
+function ValidatedTeamRow({
   rank,
   entry,
+  sendTargets,
   onToggleNoShow,
+  onSend,
   busy,
+  sendingLobby,
   muted,
 }: {
   rank: number;
   entry: BoardTeamEntry;
+  sendTargets: number[];
   onToggleNoShow: () => void;
+  onSend: (lobbyNumber: number) => void;
   busy: boolean;
+  sendingLobby: number | null;
   muted?: boolean;
 }) {
   return (
-    <div className={`flex items-center justify-between rounded-lg border border-border p-2.5 ${muted ? "opacity-80" : ""}`}>
+    <div className={`flex flex-col gap-2 rounded-lg border border-border p-2.5 sm:flex-row sm:items-center sm:justify-between ${muted ? "opacity-80" : ""}`}>
       <div className="flex items-center gap-3">
         <span className="w-5 text-xs font-semibold text-muted-foreground">#{rank}</span>
         <TeamLabel team={entry.team} />
-      </div>
-      <div className="flex items-center gap-3">
-        {entry.validatedAt && (
-          <span className="text-xs text-muted-foreground">Validée à {formatDate(entry.validatedAt)}</span>
+        {entry.forceValidated && (
+          <Badge variant="outline" className="gap-1">
+            <ShieldCheck className="size-3" />
+            Repêchée ({entry.checkedInCount}/4)
+          </Badge>
         )}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {sendTargets.map((lobbyNumber) => (
+          <Button
+            key={lobbyNumber}
+            size="sm"
+            variant="outline"
+            disabled={sendingLobby === lobbyNumber}
+            onClick={() => onSend(lobbyNumber)}
+          >
+            {sendingLobby === lobbyNumber ? <Loader2 className="size-3.5 animate-spin" /> : <Mail className="size-3.5" />}
+            {sendTargets.length > 1 ? `Envoyer (Lobby ${lobbyNumber})` : "Envoyer les identifiants"}
+          </Button>
+        ))}
         <Button size="sm" variant="outline" disabled={busy} onClick={onToggleNoShow}>
           <UserX className="size-3.5" />
           Absent
@@ -155,11 +197,92 @@ function TeamRow({
   );
 }
 
-function InfoBlock({ label, value }: { label: string; value: string }) {
+function RoomManager({
+  scrimId,
+  lobbyNumber,
+  room,
+  onSaved,
+}: {
+  scrimId: string;
+  lobbyNumber: number;
+  room: Room | null | undefined;
+  onSaved: () => void;
+}) {
+  const [editing, setEditing] = useState(!room);
+  const [roomType, setRoomType] = useState<RoomType>(room?.roomType ?? "STANDARD");
+  const [roomId, setRoomId] = useState(room?.roomId ?? "");
+  const [roomPassword, setRoomPassword] = useState(room?.roomPassword ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    try {
+      await apiRequest(`/scrims/${scrimId}/lobbies/${lobbyNumber}/room`, {
+        method: "POST",
+        body: { roomType, roomId: roomId.trim(), roomPassword: roomPassword.trim() },
+      });
+      setEditing(false);
+      onSaved();
+    } catch {
+      setError("Une erreur est survenue, réessayez.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!editing && room) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {room.roomType === "LEAGUE" ? "Room league" : "Chambre standard"}
+          </p>
+          <p className="text-sm text-foreground">
+            ID : <span className="font-mono">{room.roomId}</span> · Mot de passe :{" "}
+            <span className="font-mono">{room.roomPassword}</span>
+          </p>
+        </div>
+        <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+          <Pencil className="size-3.5" />
+          Modifier
+        </Button>
+      </div>
+    );
+  }
+
   return (
-    <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="text-sm text-foreground">{value}</p>
+    <div className="flex flex-col gap-2 rounded-lg border border-dashed border-border p-3">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <select
+          value={roomType}
+          onChange={(e) => setRoomType(e.target.value as RoomType)}
+          className="h-9 rounded-md border border-input bg-card px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <option value="STANDARD">Chambre standard</option>
+          <option value="LEAGUE">Room league</option>
+        </select>
+        <Input placeholder="ID de la room" value={roomId} onChange={(e) => setRoomId(e.target.value)} maxLength={50} />
+        <Input
+          placeholder="Mot de passe"
+          value={roomPassword}
+          onChange={(e) => setRoomPassword(e.target.value)}
+          maxLength={50}
+        />
+      </div>
+      {error && <p className="text-xs text-accent">{error}</p>}
+      <div className="flex gap-2">
+        {room && (
+          <Button size="sm" variant="outline" onClick={() => setEditing(false)} disabled={saving}>
+            Annuler
+          </Button>
+        )}
+        <Button size="sm" disabled={saving || !roomId.trim() || !roomPassword.trim()} onClick={save}>
+          {saving && <Loader2 className="size-4 animate-spin" />}
+          Enregistrer et envoyer aux joueurs
+        </Button>
+      </div>
     </div>
   );
 }
@@ -174,6 +297,7 @@ export function ScrimDetail() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [busyRegistrationId, setBusyRegistrationId] = useState<string | null>(null);
+  const [sendingKey, setSendingKey] = useState<string | null>(null);
 
   const loadScrim = useCallback(() => {
     apiRequest<{ scrim: ScrimDetailData }>(`/scrims/${params.id}`)
@@ -182,7 +306,7 @@ export function ScrimDetail() {
   }, [params.id]);
 
   const loadBoard = useCallback(() => {
-    apiRequest<BoardData>(`/scrims/${params.id}/board`).then((d) => setBoard(d ?? null));
+    apiRequest<BoardData>(`/scrims/${params.id}/admin-board`).then((d) => setBoard(d ?? null));
   }, [params.id]);
 
   useEffect(loadScrim, [loadScrim]);
@@ -231,6 +355,26 @@ export function ScrimDetail() {
     }
   }
 
+  async function forceValidate(registrationId: string) {
+    setBusyRegistrationId(registrationId);
+    try {
+      await apiRequest(`/scrims/${params.id}/registrations/${registrationId}/force-validate`, { method: "POST" });
+      loadBoard();
+    } finally {
+      setBusyRegistrationId(null);
+    }
+  }
+
+  async function sendRoomCredentials(lobbyNumber: number, registrationId: string) {
+    const key = `${lobbyNumber}:${registrationId}`;
+    setSendingKey(key);
+    try {
+      await apiRequest(`/scrims/${params.id}/lobbies/${lobbyNumber}/send/${registrationId}`, { method: "POST" });
+    } finally {
+      setSendingKey(null);
+    }
+  }
+
   async function handleDelete() {
     setDeleting(true);
     try {
@@ -266,7 +410,15 @@ export function ScrimDetail() {
     );
   }
 
-  const isEmpty = board && board.lobbies.length === 0 && board.sub.length === 0 && board.pending.length === 0 && board.noShow.length === 0;
+  const isEmpty =
+    board &&
+    board.lobbies.length === 0 &&
+    board.sub.length === 0 &&
+    board.partial.length === 0 &&
+    board.notCheckedIn.length === 0 &&
+    board.noShow.length === 0;
+
+  const lobbiesWithRoom = board?.lobbies.filter((l) => l.room) ?? [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -322,16 +474,24 @@ export function ScrimDetail() {
                   Lobby {lobby.lobbyNumber} ({lobby.teams.length}/{scrim.teamsPerLobby})
                 </CardTitle>
               </CardHeader>
-              <CardContent className="flex flex-col gap-2">
-                {lobby.teams.map((entry, idx) => (
-                  <TeamRow
-                    key={entry.registrationId}
-                    rank={idx + 1}
-                    entry={entry}
-                    busy={busyRegistrationId === entry.registrationId}
-                    onToggleNoShow={() => toggleNoShow(entry.registrationId, false)}
-                  />
-                ))}
+              <CardContent className="flex flex-col gap-3">
+                <RoomManager scrimId={params.id} lobbyNumber={lobby.lobbyNumber} room={lobby.room} onSaved={loadBoard} />
+                <div className="flex flex-col gap-2">
+                  {lobby.teams.map((entry, idx) => (
+                    <ValidatedTeamRow
+                      key={entry.registrationId}
+                      rank={idx + 1}
+                      entry={entry}
+                      sendTargets={lobby.room ? [lobby.lobbyNumber] : []}
+                      busy={busyRegistrationId === entry.registrationId}
+                      sendingLobby={
+                        sendingKey === `${lobby.lobbyNumber}:${entry.registrationId}` ? lobby.lobbyNumber : null
+                      }
+                      onToggleNoShow={() => toggleNoShow(entry.registrationId, false)}
+                      onSend={(lobbyNumber) => sendRoomCredentials(lobbyNumber, entry.registrationId)}
+                    />
+                  ))}
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -342,30 +502,77 @@ export function ScrimDetail() {
                 <CardTitle>SUB ({board.sub.length})</CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col gap-2">
+                <p className="text-xs text-muted-foreground">
+                  Remontent automatiquement si une équipe d&apos;un lobby est marquée absente. Envoyez-leur les
+                  identifiants manuellement si vous les faites entrer en jeu.
+                </p>
                 {board.sub.map((entry, idx) => (
-                  <TeamRow
+                  <ValidatedTeamRow
                     key={entry.registrationId}
                     rank={idx + 1}
                     entry={entry}
                     muted
+                    sendTargets={lobbiesWithRoom.map((l) => l.lobbyNumber)}
                     busy={busyRegistrationId === entry.registrationId}
+                    sendingLobby={
+                      lobbiesWithRoom.find((l) => sendingKey === `${l.lobbyNumber}:${entry.registrationId}`)
+                        ?.lobbyNumber ?? null
+                    }
                     onToggleNoShow={() => toggleNoShow(entry.registrationId, false)}
+                    onSend={(lobbyNumber) => sendRoomCredentials(lobbyNumber, entry.registrationId)}
                   />
                 ))}
               </CardContent>
             </Card>
           )}
 
-          {board.pending.length > 0 && (
+          {board.partial.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>En attente de check-in ({board.pending.length})</CardTitle>
+                <CardTitle>Check-in incomplet ({board.partial.length})</CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col gap-2">
-                {board.pending.map((entry) => (
+                <p className="text-xs text-muted-foreground">
+                  Entre 1 et 3 membres ont fait leur check-in. Vous pouvez les repêcher manuellement si la liste des
+                  équipes validées est incomplète.
+                </p>
+                {board.partial.map((entry) => (
                   <div key={entry.registrationId} className="flex items-center justify-between rounded-lg border border-border p-2.5">
                     <TeamLabel team={entry.team} />
-                    <span className="text-xs text-muted-foreground">{entry.checkedInCount}/4 check-in</span>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">{entry.checkedInCount}/4 check-in</Badge>
+                      <Button
+                        size="sm"
+                        disabled={busyRegistrationId === entry.registrationId}
+                        onClick={() => forceValidate(entry.registrationId)}
+                      >
+                        {busyRegistrationId === entry.registrationId ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <ShieldCheck className="size-3.5" />
+                        )}
+                        Valider manuellement
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {board.notCheckedIn.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Aucun check-in ({board.notCheckedIn.length})</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-2">
+                <p className="text-xs text-muted-foreground">
+                  Inscrites mais aucun membre n&apos;a fait de check-in — exclues d&apos;office, pas de repêchage
+                  possible.
+                </p>
+                {board.notCheckedIn.map((entry) => (
+                  <div key={entry.registrationId} className="flex items-center justify-between rounded-lg border border-border p-2.5 opacity-70">
+                    <TeamLabel team={entry.team} />
                   </div>
                 ))}
               </CardContent>
