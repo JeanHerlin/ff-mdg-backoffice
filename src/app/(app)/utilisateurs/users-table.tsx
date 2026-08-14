@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Search, ChevronLeft, ChevronRight, ListFilter, Loader2, Trash2 } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, ListFilter, Loader2, Medal, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,6 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { apiRequestWithMeta, apiRequest } from "@/lib/api-client";
 
 type GameRole = "RUSHER" | "BOMBER" | "SNIPER" | "SUPPORT" | "VERSATILE";
-type PlayerRank = "BRONZE" | "SILVER" | "GOLD" | "PLATINUM" | "DIAMOND" | "HEROIC" | "GRANDMASTER";
 type StatsPeriod = "CURRENT_SEASON" | "ALL_SEASONS";
 
 interface PlayerProfile {
@@ -24,7 +23,7 @@ interface PlayerProfile {
 }
 
 interface PlayerStats {
-  rank: PlayerRank;
+  rank: number | null;
   matchesPlayed: number;
   totalKills: number;
   wins: number;
@@ -59,43 +58,38 @@ const GAME_ROLE_LABEL: Record<GameRole, string> = {
   VERSATILE: "Polyvalent",
 };
 
-const RANK_LABEL: Record<PlayerRank, string> = {
-  BRONZE: "Bronze",
-  SILVER: "Argent",
-  GOLD: "Or",
-  PLATINUM: "Platine",
-  DIAMOND: "Diamant",
-  HEROIC: "Héroïque",
-  GRANDMASTER: "Grand Maître",
-};
-
-const RANK_STYLE: Record<PlayerRank, string> = {
-  BRONZE: "bg-amber-800/15 text-amber-700 border-amber-700/30",
-  SILVER: "bg-slate-400/15 text-slate-500 border-slate-400/30",
-  GOLD: "bg-yellow-500/15 text-yellow-600 border-yellow-500/30",
-  PLATINUM: "bg-cyan-500/15 text-cyan-600 border-cyan-500/30",
-  DIAMOND: "bg-blue-500/15 text-blue-600 border-blue-500/30",
-  HEROIC: "bg-purple-500/15 text-purple-600 border-purple-500/30",
-  GRANDMASTER: "bg-accent/15 text-accent border-accent/30",
-};
-
 const ROLE_OPTIONS = [
   { value: "", label: "Tous les rôles" },
   ...(Object.entries(GAME_ROLE_LABEL) as [GameRole, string][]).map(([value, label]) => ({ value, label })),
-];
-const RANK_OPTIONS = [
-  { value: "", label: "Tous les rangs" },
-  ...(Object.entries(RANK_LABEL) as [PlayerRank, string][]).map(([value, label]) => ({ value, label })),
 ];
 const PERIOD_OPTIONS = [
   { value: "ALL_SEASONS", label: "Toutes les saisons" },
   { value: "CURRENT_SEASON", label: "Saison actuelle" },
 ];
 
-function RankBadge({ rank }: { rank: PlayerRank }) {
+// Le rang est une position au classement (1 = meilleur), pas un palier —
+// podium (top 3) mis en avant, le reste reste neutre.
+const PODIUM_STYLE: Record<number, string> = {
+  1: "bg-yellow-500/15 text-yellow-600 border-yellow-500/30",
+  2: "bg-slate-400/15 text-slate-500 border-slate-400/30",
+  3: "bg-amber-800/15 text-amber-700 border-amber-700/30",
+};
+
+function RankBadge({ rank }: { rank: number | null }) {
+  if (rank === null) {
+    return (
+      <span className="inline-flex items-center rounded-full border border-border px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+        Non classé
+      </span>
+    );
+  }
+  const podiumStyle = PODIUM_STYLE[rank];
   return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${RANK_STYLE[rank]}`}>
-      {RANK_LABEL[rank]}
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${podiumStyle ?? "bg-muted/60 text-foreground border-border"}`}
+    >
+      {podiumStyle && <Medal className="size-3" />}
+      #{rank}
     </span>
   );
 }
@@ -120,9 +114,9 @@ export function UsersTable() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [role, setRole] = useState("");
-  const [rank, setRank] = useState("");
   const [period, setPeriod] = useState<StatsPeriod>("ALL_SEASONS");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [maxRank, setMaxRank] = useState("");
   const [minMatches, setMinMatches] = useState("");
   const [minKills, setMinKills] = useState("");
   const [minWins, setMinWins] = useState("");
@@ -133,7 +127,7 @@ export function UsersTable() {
 
   useEffect(() => {
     setPage(1);
-  }, [tab, role, rank, period, minMatches, minKills, minWins, minKd, minPerformanceIndex]);
+  }, [tab, role, maxRank, period, minMatches, minKills, minWins, minKd, minPerformanceIndex]);
 
   useEffect(() => {
     const handle = setTimeout(() => {
@@ -143,7 +137,7 @@ export function UsersTable() {
       if (tab === "verified") {
         params.set("period", period);
         if (role) params.set("role", role);
-        if (rank) params.set("rank", rank);
+        if (maxRank) params.set("maxRank", maxRank);
         if (minMatches) params.set("minMatches", minMatches);
         if (minKills) params.set("minKills", minKills);
         if (minWins) params.set("minWins", minWins);
@@ -158,7 +152,7 @@ export function UsersTable() {
         .finally(() => setLoading(false));
     }, 300);
     return () => clearTimeout(handle);
-  }, [page, search, endpoint, tab, role, rank, period, minMatches, minKills, minWins, minKd, minPerformanceIndex]);
+  }, [page, search, endpoint, tab, role, maxRank, period, minMatches, minKills, minWins, minKd, minPerformanceIndex]);
 
   async function confirmToggleActive() {
     if (!statusTarget) return;
@@ -231,7 +225,6 @@ export function UsersTable() {
         {tab === "verified" && (
           <>
             <Select value={role} onChange={setRole} options={ROLE_OPTIONS} className="w-40" />
-            <Select value={rank} onChange={setRank} options={RANK_OPTIONS} className="w-40" />
             <Select value={period} onChange={(v) => setPeriod(v as StatsPeriod)} options={PERIOD_OPTIONS} className="w-44" />
             <Button variant="outline" onClick={() => setShowAdvanced((v) => !v)}>
               <ListFilter className="size-4" />
@@ -242,7 +235,11 @@ export function UsersTable() {
       </div>
 
       {tab === "verified" && showAdvanced && (
-        <div className="grid grid-cols-2 gap-2 rounded-lg border border-border p-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 rounded-lg border border-border p-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-medium text-muted-foreground">Classé parmi le top</label>
+            <Input type="number" min={1} placeholder="ex. 50" value={maxRank} onChange={(e) => setMaxRank(e.target.value)} />
+          </div>
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-medium text-muted-foreground">Matchs min.</label>
             <Input type="number" min={0} value={minMatches} onChange={(e) => setMinMatches(e.target.value)} />
