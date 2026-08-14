@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Search, ChevronLeft, ChevronRight, Loader2, Crown, TriangleAlert } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, Crown, Hash, Loader2, TriangleAlert } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { apiRequestWithMeta, apiRequest } from "@/lib/api-client";
 
 interface TeamSummary {
   id: string;
+  teamUid: string;
   name: string;
   tag: string;
   logoUrl: string | null;
@@ -214,6 +215,10 @@ export function TeamsTable() {
               <div>
                 <p className="text-lg font-semibold text-foreground">{selected.name}</p>
                 <p className="text-sm text-muted-foreground">[{selected.tag}]</p>
+                <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Hash className="size-3" />
+                  {selected.teamUid}
+                </p>
               </div>
             </div>
 
