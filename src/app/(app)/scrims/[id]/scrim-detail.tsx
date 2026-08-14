@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
+import { DateTimePicker } from "@/components/ui/datetime-picker";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { apiRequest, ApiError } from "@/lib/api-client";
 
@@ -255,14 +257,14 @@ function RoomManager({
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-dashed border-border p-3">
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <select
+        <Select
           value={roomType}
-          onChange={(e) => setRoomType(e.target.value as RoomType)}
-          className="h-9 rounded-md border border-input bg-card px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <option value="STANDARD">Chambre standard</option>
-          <option value="LEAGUE">Room league</option>
-        </select>
+          onChange={(v) => setRoomType(v as RoomType)}
+          options={[
+            { value: "STANDARD", label: "Chambre standard" },
+            { value: "LEAGUE", label: "Room league" },
+          ]}
+        />
         <Input placeholder="ID de la room" value={roomId} onChange={(e) => setRoomId(e.target.value)} maxLength={50} />
         <Input
           placeholder="Mot de passe"
@@ -644,6 +646,13 @@ function EditScrimForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    // Le DateTimePicker n'est pas un <input> natif : plus de validation
+    // "required" du navigateur, donc on vérifie ici avant de construire les
+    // ISO (new Date("").toISOString() lèverait sinon une exception).
+    if (!registrationOpensAt || !registrationClosesAt || !checkinOpensAt || !checkinClosesAt || !startAt) {
+      setError("Choisissez une date et une heure pour chaque champ.");
+      return;
+    }
     setSaving(true);
     try {
       await apiRequest(`/scrims/${scrim.id}`, {
@@ -697,25 +706,25 @@ function EditScrimForm({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="edit-reg-open">Inscription — ouverture</Label>
-              <Input id="edit-reg-open" type="datetime-local" value={registrationOpensAt} onChange={(e) => setRegistrationOpensAt(e.target.value)} required />
+              <DateTimePicker id="edit-reg-open" value={registrationOpensAt} onChange={setRegistrationOpensAt} />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="edit-reg-close">Inscription — fermeture</Label>
-              <Input id="edit-reg-close" type="datetime-local" value={registrationClosesAt} onChange={(e) => setRegistrationClosesAt(e.target.value)} required />
+              <DateTimePicker id="edit-reg-close" value={registrationClosesAt} onChange={setRegistrationClosesAt} />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="edit-checkin-open">Check-in — ouverture</Label>
-              <Input id="edit-checkin-open" type="datetime-local" value={checkinOpensAt} onChange={(e) => setCheckinOpensAt(e.target.value)} required />
+              <DateTimePicker id="edit-checkin-open" value={checkinOpensAt} onChange={setCheckinOpensAt} />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="edit-checkin-close">Check-in — fermeture</Label>
-              <Input id="edit-checkin-close" type="datetime-local" value={checkinClosesAt} onChange={(e) => setCheckinClosesAt(e.target.value)} required />
+              <DateTimePicker id="edit-checkin-close" value={checkinClosesAt} onChange={setCheckinClosesAt} />
             </div>
           </div>
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="edit-start">Début du scrim</Label>
-            <Input id="edit-start" type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} required />
+            <DateTimePicker id="edit-start" value={startAt} onChange={setStartAt} />
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

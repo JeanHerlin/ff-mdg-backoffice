@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { DateTimePicker } from "@/components/ui/datetime-picker";
 import { apiRequest, ApiError } from "@/lib/api-client";
 
 interface ScrimDetail {
@@ -31,6 +32,13 @@ export function CreateScrimForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    // Le DateTimePicker n'est pas un <input> natif : plus de validation
+    // "required" du navigateur, donc on vérifie ici avant de construire les
+    // ISO (new Date("").toISOString() lèverait sinon une exception).
+    if (!registrationOpensAt || !registrationClosesAt || !checkinOpensAt || !checkinClosesAt || !startAt) {
+      setError("Choisissez une date et une heure pour chaque champ.");
+      return;
+    }
     setSubmitting(true);
     try {
       const data = await apiRequest<{ scrim: ScrimDetail }>("/scrims", {
@@ -88,23 +96,11 @@ export function CreateScrimForm() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="reg-open">Ouverture</Label>
-                <Input
-                  id="reg-open"
-                  type="datetime-local"
-                  value={registrationOpensAt}
-                  onChange={(e) => setRegistrationOpensAt(e.target.value)}
-                  required
-                />
+                <DateTimePicker id="reg-open" value={registrationOpensAt} onChange={setRegistrationOpensAt} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="reg-close">Fermeture</Label>
-                <Input
-                  id="reg-close"
-                  type="datetime-local"
-                  value={registrationClosesAt}
-                  onChange={(e) => setRegistrationClosesAt(e.target.value)}
-                  required
-                />
+                <DateTimePicker id="reg-close" value={registrationClosesAt} onChange={setRegistrationClosesAt} />
               </div>
             </div>
           </fieldset>
@@ -116,30 +112,18 @@ export function CreateScrimForm() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="checkin-open">Ouverture</Label>
-                <Input
-                  id="checkin-open"
-                  type="datetime-local"
-                  value={checkinOpensAt}
-                  onChange={(e) => setCheckinOpensAt(e.target.value)}
-                  required
-                />
+                <DateTimePicker id="checkin-open" value={checkinOpensAt} onChange={setCheckinOpensAt} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="checkin-close">Fermeture</Label>
-                <Input
-                  id="checkin-close"
-                  type="datetime-local"
-                  value={checkinClosesAt}
-                  onChange={(e) => setCheckinClosesAt(e.target.value)}
-                  required
-                />
+                <DateTimePicker id="checkin-close" value={checkinClosesAt} onChange={setCheckinClosesAt} />
               </div>
             </div>
           </fieldset>
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="scrim-start">Début du scrim</Label>
-            <Input id="scrim-start" type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} required />
+            <DateTimePicker id="scrim-start" value={startAt} onChange={setStartAt} />
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

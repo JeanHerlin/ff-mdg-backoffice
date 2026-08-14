@@ -1,20 +1,36 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Search, ChevronLeft, ChevronRight, Loader2, Trash2 } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, ListFilter, Loader2, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { Sheet } from "@/components/ui/sheet";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { apiRequestWithMeta, apiRequest } from "@/lib/api-client";
+
+type GameRole = "RUSHER" | "BOMBER" | "SNIPER" | "SUPPORT" | "VERSATILE";
+type PlayerRank = "BRONZE" | "SILVER" | "GOLD" | "PLATINUM" | "DIAMOND" | "HEROIC" | "GRANDMASTER";
+type StatsPeriod = "CURRENT_SEASON" | "ALL_SEASONS";
 
 interface PlayerProfile {
   id: string;
   ffPlayerId: string;
   ffPseudo: string;
   verificationStatus: "PENDING" | "VERIFIED" | "REJECTED";
+  preferredRole?: GameRole;
+}
+
+interface PlayerStats {
+  rank: PlayerRank;
+  matchesPlayed: number;
+  totalKills: number;
+  wins: number;
+  placementPoints: number;
+  kd: number;
+  performanceIndex: number;
 }
 
 interface PlayerUser {
@@ -26,6 +42,7 @@ interface PlayerUser {
   emailVerifiedAt: string | null;
   createdAt: string;
   playerProfile: PlayerProfile | null;
+  stats?: PlayerStats;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -33,6 +50,55 @@ const STATUS_LABEL: Record<string, string> = {
   VERIFIED: "Vérifié",
   REJECTED: "Rejeté",
 };
+
+const GAME_ROLE_LABEL: Record<GameRole, string> = {
+  RUSHER: "Rusher",
+  BOMBER: "Bombardier",
+  SNIPER: "Sniper",
+  SUPPORT: "Support",
+  VERSATILE: "Polyvalent",
+};
+
+const RANK_LABEL: Record<PlayerRank, string> = {
+  BRONZE: "Bronze",
+  SILVER: "Argent",
+  GOLD: "Or",
+  PLATINUM: "Platine",
+  DIAMOND: "Diamant",
+  HEROIC: "Héroïque",
+  GRANDMASTER: "Grand Maître",
+};
+
+const RANK_STYLE: Record<PlayerRank, string> = {
+  BRONZE: "bg-amber-800/15 text-amber-700 border-amber-700/30",
+  SILVER: "bg-slate-400/15 text-slate-500 border-slate-400/30",
+  GOLD: "bg-yellow-500/15 text-yellow-600 border-yellow-500/30",
+  PLATINUM: "bg-cyan-500/15 text-cyan-600 border-cyan-500/30",
+  DIAMOND: "bg-blue-500/15 text-blue-600 border-blue-500/30",
+  HEROIC: "bg-purple-500/15 text-purple-600 border-purple-500/30",
+  GRANDMASTER: "bg-accent/15 text-accent border-accent/30",
+};
+
+const ROLE_OPTIONS = [
+  { value: "", label: "Tous les rôles" },
+  ...(Object.entries(GAME_ROLE_LABEL) as [GameRole, string][]).map(([value, label]) => ({ value, label })),
+];
+const RANK_OPTIONS = [
+  { value: "", label: "Tous les rangs" },
+  ...(Object.entries(RANK_LABEL) as [PlayerRank, string][]).map(([value, label]) => ({ value, label })),
+];
+const PERIOD_OPTIONS = [
+  { value: "ALL_SEASONS", label: "Toutes les saisons" },
+  { value: "CURRENT_SEASON", label: "Saison actuelle" },
+];
+
+function RankBadge({ rank }: { rank: PlayerRank }) {
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${RANK_STYLE[rank]}`}>
+      {RANK_LABEL[rank]}
+    </span>
+  );
+}
 
 function avatarSrc(url: string | null) {
   return url;
@@ -53,17 +119,37 @@ export function UsersTable() {
   const [deleteTarget, setDeleteTarget] = useState<PlayerUser | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  const [role, setRole] = useState("");
+  const [rank, setRank] = useState("");
+  const [period, setPeriod] = useState<StatsPeriod>("ALL_SEASONS");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [minMatches, setMinMatches] = useState("");
+  const [minKills, setMinKills] = useState("");
+  const [minWins, setMinWins] = useState("");
+  const [minKd, setMinKd] = useState("");
+  const [minPerformanceIndex, setMinPerformanceIndex] = useState("");
+
   const endpoint = tab === "verified" ? "/users" : "/users/unverified";
 
   useEffect(() => {
     setPage(1);
-  }, [tab]);
+  }, [tab, role, rank, period, minMatches, minKills, minWins, minKd, minPerformanceIndex]);
 
   useEffect(() => {
     const handle = setTimeout(() => {
       setLoading(true);
       const params = new URLSearchParams({ page: String(page), perPage: "10" });
       if (search) params.set("search", search);
+      if (tab === "verified") {
+        params.set("period", period);
+        if (role) params.set("role", role);
+        if (rank) params.set("rank", rank);
+        if (minMatches) params.set("minMatches", minMatches);
+        if (minKills) params.set("minKills", minKills);
+        if (minWins) params.set("minWins", minWins);
+        if (minKd) params.set("minKd", minKd);
+        if (minPerformanceIndex) params.set("minPerformanceIndex", minPerformanceIndex);
+      }
       apiRequestWithMeta<PlayerUser[]>(`${endpoint}?${params}`)
         .then(({ data, meta }) => {
           setItems(data ?? []);
@@ -72,7 +158,7 @@ export function UsersTable() {
         .finally(() => setLoading(false));
     }, 300);
     return () => clearTimeout(handle);
-  }, [page, search, endpoint]);
+  }, [page, search, endpoint, tab, role, rank, period, minMatches, minKills, minWins, minKd, minPerformanceIndex]);
 
   async function confirmToggleActive() {
     if (!statusTarget) return;
@@ -130,7 +216,7 @@ export function UsersTable() {
             Email non vérifié
           </button>
         </div>
-        <div className="relative max-w-sm flex-1">
+        <div className="relative min-w-50 flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Rechercher (email, pseudo, ID Free Fire...)"
@@ -142,7 +228,43 @@ export function UsersTable() {
             className="pl-9"
           />
         </div>
+        {tab === "verified" && (
+          <>
+            <Select value={role} onChange={setRole} options={ROLE_OPTIONS} className="w-40" />
+            <Select value={rank} onChange={setRank} options={RANK_OPTIONS} className="w-40" />
+            <Select value={period} onChange={(v) => setPeriod(v as StatsPeriod)} options={PERIOD_OPTIONS} className="w-44" />
+            <Button variant="outline" onClick={() => setShowAdvanced((v) => !v)}>
+              <ListFilter className="size-4" />
+              Plus de filtres
+            </Button>
+          </>
+        )}
       </div>
+
+      {tab === "verified" && showAdvanced && (
+        <div className="grid grid-cols-2 gap-2 rounded-lg border border-border p-3 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-medium text-muted-foreground">Matchs min.</label>
+            <Input type="number" min={0} value={minMatches} onChange={(e) => setMinMatches(e.target.value)} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-medium text-muted-foreground">Kills min.</label>
+            <Input type="number" min={0} value={minKills} onChange={(e) => setMinKills(e.target.value)} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-medium text-muted-foreground">Victoires min.</label>
+            <Input type="number" min={0} value={minWins} onChange={(e) => setMinWins(e.target.value)} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-medium text-muted-foreground">K/D min.</label>
+            <Input type="number" min={0} step={0.1} value={minKd} onChange={(e) => setMinKd(e.target.value)} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-medium text-muted-foreground">Indice min.</label>
+            <Input type="number" min={0} max={100} value={minPerformanceIndex} onChange={(e) => setMinPerformanceIndex(e.target.value)} />
+          </div>
+        </div>
+      )}
 
       {tab === "unverified" && (
         <p className="text-xs text-muted-foreground">
@@ -163,6 +285,8 @@ export function UsersTable() {
                 {tab === "verified" ? (
                   <>
                     <th className="px-4 py-3 font-medium">Vérification</th>
+                    <th className="px-4 py-3 font-medium">Rang</th>
+                    <th className="px-4 py-3 font-medium">Indice</th>
                     <th className="px-4 py-3 font-medium">Statut</th>
                   </>
                 ) : (
@@ -174,13 +298,13 @@ export function UsersTable() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
+                  <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
                     <Loader2 className="mx-auto size-5 animate-spin" />
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
+                  <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
                     Aucun utilisateur trouvé.
                   </td>
                 </tr>
@@ -215,6 +339,8 @@ export function UsersTable() {
                             </Badge>
                           )}
                         </td>
+                        <td className="px-4 py-3">{user.stats && <RankBadge rank={user.stats.rank} />}</td>
+                        <td className="px-4 py-3 font-medium text-foreground">{user.stats?.performanceIndex ?? "—"}</td>
                         <td className="px-4 py-3">
                           <Badge variant={user.isActive ? "default" : "accent"}>
                             {user.isActive ? "Actif" : "Désactivé"}
@@ -304,6 +430,25 @@ export function UsersTable() {
               <Field label="Inscrit le" value={new Date(selected.createdAt).toLocaleString("fr-FR")} />
               <Field label="Statut" value={selected.isActive ? "Actif" : "Désactivé"} />
             </dl>
+
+            {selected.stats && (
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Indice de performance (donnée simulée en attendant le suivi réel des résultats)
+                </p>
+                <div className="mb-2">
+                  <RankBadge rank={selected.stats.rank} />
+                </div>
+                <dl className="grid grid-cols-3 gap-x-4 gap-y-3 text-sm">
+                  <Field label="Matchs" value={String(selected.stats.matchesPlayed)} />
+                  <Field label="Kills" value={String(selected.stats.totalKills)} />
+                  <Field label="Victoires" value={String(selected.stats.wins)} />
+                  <Field label="Pts placement" value={String(selected.stats.placementPoints)} />
+                  <Field label="K/D" value={selected.stats.kd.toFixed(2)} />
+                  <Field label="Indice" value={String(selected.stats.performanceIndex)} />
+                </dl>
+              </div>
+            )}
 
             <Button
               variant={selected.isActive ? "accent" : "default"}
