@@ -41,12 +41,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [status, setStatus] = useState<AuthContextValue["status"]>("loading");
 
+  const logout = useCallback(async () => {
+    await apiRequest("/auth/logout", { method: "POST" }).catch(() => undefined);
+    setAccessToken(null);
+    setUser(null);
+    setStatus("unauthenticated");
+  }, []);
+
   const refreshUser = useCallback(async () => {
     const data = await apiRequest<{ user: AuthUser }>("/auth/me");
-    const nextUser = isBackofficeRole(data?.user) ? data!.user : null;
-    setUser(nextUser);
-    setStatus(nextUser ? "authenticated" : "unauthenticated");
-  }, []);
+    if (!isBackofficeRole(data?.user)) {
+      // Un compte joueur ne doit jamais garder de session active côté
+      // backoffice — on efface le cookie plutôt que de simplement ignorer
+      // l'utilisateur côté client.
+      if (data?.user) await logout();
+      setUser(null);
+      setStatus("unauthenticated");
+      return;
+    }
+    setUser(data.user);
+    setStatus("authenticated");
+  }, [logout]);
 
   useEffect(() => {
     (async () => {
@@ -66,20 +81,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     if (!data) return;
     if (!isBackofficeRole(data.user)) {
-      setAccessToken(null);
+      // Le jeton vient d'être émis pour ce compte — on l'utilise le temps
+      // d'appeler /auth/logout (authentifié) afin d'invalider la session
+      // côté serveur, pas seulement d'ignorer l'utilisateur côté client.
+      setAccessToken(data.accessToken);
+      await logout();
       throw new Error("auth.forbidden");
     }
     setAccessToken(data.accessToken);
     setUser(data.user);
     setStatus("authenticated");
-  }, []);
-
-  const logout = useCallback(async () => {
-    await apiRequest("/auth/logout", { method: "POST" }).catch(() => undefined);
-    setAccessToken(null);
-    setUser(null);
-    setStatus("unauthenticated");
-  }, []);
+  }, [logout]);
 
   const can = useCallback(
     (permission: BackofficePermission) => {
