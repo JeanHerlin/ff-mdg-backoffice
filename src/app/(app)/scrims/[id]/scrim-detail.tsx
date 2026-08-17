@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Loader2, Mail, Pencil, ShieldCheck, Timer, Trash2, UserX } from "lucide-react";
+import { CheckCircle2, Loader2, Mail, Pencil, ShieldCheck, Timer, Trash2, UserX } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,8 +12,9 @@ import { Select } from "@/components/ui/select";
 import { DateTimePicker } from "@/components/ui/datetime-picker";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { apiRequest, ApiError } from "@/lib/api-client";
+import { ScrimMatchesSection } from "./scrim-matches-section";
 
-type Phase = "UPCOMING" | "REGISTRATION_OPEN" | "WAITING" | "CHECKIN_OPEN" | "CHECKIN_CLOSED" | "STARTED";
+type Phase = "UPCOMING" | "REGISTRATION_OPEN" | "WAITING" | "CHECKIN_OPEN" | "CHECKIN_CLOSED" | "STARTED" | "FINISHED";
 type RoomType = "STANDARD" | "LEAGUE";
 
 interface ScrimDetailData {
@@ -61,6 +62,7 @@ const PHASE_LABEL: Record<Phase, string> = {
   CHECKIN_OPEN: "Check-in en cours",
   CHECKIN_CLOSED: "Check-in terminé",
   STARTED: "Lancé",
+  FINISHED: "Terminé",
 };
 
 const PHASE_VARIANT: Record<Phase, "default" | "muted" | "accent" | "outline"> = {
@@ -70,6 +72,7 @@ const PHASE_VARIANT: Record<Phase, "default" | "muted" | "accent" | "outline"> =
   CHECKIN_OPEN: "accent",
   CHECKIN_CLOSED: "outline",
   STARTED: "muted",
+  FINISHED: "default",
 };
 
 function formatDate(iso: string) {
@@ -298,6 +301,8 @@ export function ScrimDetail() {
   const [editing, setEditing] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [finishOpen, setFinishOpen] = useState(false);
+  const [finishing, setFinishing] = useState(false);
   const [busyRegistrationId, setBusyRegistrationId] = useState<string | null>(null);
   const [sendingKey, setSendingKey] = useState<string | null>(null);
 
@@ -387,6 +392,17 @@ export function ScrimDetail() {
     }
   }
 
+  async function handleFinish() {
+    setFinishing(true);
+    try {
+      await apiRequest(`/scrims/${params.id}/finish`, { method: "POST" });
+      setFinishOpen(false);
+      loadScrim();
+    } finally {
+      setFinishing(false);
+    }
+  }
+
   if (scrim === undefined) {
     return (
       <div className="flex justify-center py-20">
@@ -448,6 +464,12 @@ export function ScrimDetail() {
             <Button variant="outline" onClick={() => setEditing(true)}>
               <Pencil className="size-4" />
               Modifier
+            </Button>
+          )}
+          {scrim.phase === "STARTED" && (
+            <Button variant="outline" onClick={() => setFinishOpen(true)}>
+              <CheckCircle2 className="size-4" />
+              Terminer le scrim
             </Button>
           )}
           <Button variant="accent" onClick={() => setDeleteOpen(true)}>
@@ -608,6 +630,8 @@ export function ScrimDetail() {
         </div>
       )}
 
+      {(scrim.phase === "STARTED" || scrim.phase === "FINISHED") && <ScrimMatchesSection scrimId={params.id} />}
+
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
@@ -617,6 +641,16 @@ export function ScrimDetail() {
         variant="accent"
         loading={deleting}
         onConfirm={handleDelete}
+      />
+
+      <ConfirmDialog
+        open={finishOpen}
+        onOpenChange={setFinishOpen}
+        title="Terminer ce scrim ?"
+        description="Marque le scrim comme terminé. Assurez-vous d'avoir confirmé tous les résultats de match avant de continuer."
+        confirmLabel="Terminer"
+        loading={finishing}
+        onConfirm={handleFinish}
       />
     </div>
   );
