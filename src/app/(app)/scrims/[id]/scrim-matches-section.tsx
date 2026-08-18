@@ -302,14 +302,14 @@ function MatchCard({
           )}
 
           {match.images.length > 0 && (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col gap-3">
               {match.images.map((img) => (
-                <a key={img.id} href={img.imageUrl} target="_blank" rel="noopener noreferrer">
+                <a key={img.id} href={img.imageUrl} target="_blank" rel="noopener noreferrer" title="Ouvrir en plein écran">
                   {/* eslint-disable-next-line @next/next/no-img-element -- image dynamique Cloudinary */}
                   <img
                     src={img.imageUrl}
                     alt="Capture résultat"
-                    className={`h-24 w-auto rounded-md border object-cover ${img.isValidFreeFireResult ? "border-border" : "border-accent opacity-50"}`}
+                    className={`max-h-[70vh] w-full rounded-md border object-contain ${img.isValidFreeFireResult ? "border-border" : "border-accent opacity-50"}`}
                   />
                 </a>
               ))}
