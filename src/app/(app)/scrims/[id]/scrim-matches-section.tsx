@@ -62,6 +62,8 @@ interface TeamResult {
   id: string;
   placement: number;
   totalKills: number;
+  placementPoints: number;
+  killPoints: number;
   points: number;
   isRegistered: boolean;
   validated: boolean;
@@ -385,7 +387,9 @@ function TeamResultRow({
             <span className="text-sm text-muted-foreground">Non reconnu{teamResult.unmatchedLabel ? ` — "${teamResult.unmatchedLabel}"` : ""}</span>
           )}
           <Badge variant="outline">{teamResult.totalKills} kills</Badge>
-          <Badge>{teamResult.points} pts</Badge>
+          <Badge variant="outline">{teamResult.placementPoints} pts placement</Badge>
+          <Badge variant="outline">{teamResult.killPoints} pts kills</Badge>
+          <Badge>{teamResult.points} pts total</Badge>
         </div>
         <ValidateTeamButton matchId={matchId} teamResultId={teamResult.id} validated={teamResult.validated} onChanged={onChanged} />
       </div>
