@@ -10,6 +10,7 @@ import {
   Plus,
   Trash2,
   TriangleAlert,
+  X,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,7 @@ import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { apiRequest, ApiError } from "@/lib/api-client";
+import { apiRequest } from "@/lib/api-client";
 
 type FreeFireMap = "BERMUDA" | "PURGATORY" | "ALPINE" | "KALAHARI" | "NEXTERRA" | "SOLARA";
 type MatchStatus = "PROCESSING" | "PENDING_REVIEW" | "CONFIRMED";
@@ -113,13 +114,48 @@ export function ScrimMatchesSection({ scrimId }: { scrimId: string }) {
 
   useEffect(load, [load]);
 
+  // --- Mises à jour locales — jamais de rechargement complet après une
+  // simple validation/édition/suppression, seulement après création ou
+  // suppression d'un match entier. ---
+  function withTeamResults(matchId: string, updater: (teamResults: TeamResult[]) => TeamResult[]) {
+    setMatches((prev) => prev.map((m) => (m.id === matchId ? { ...m, teamResults: updater(m.teamResults) } : m)));
+  }
+
+  function patchTeamResult(matchId: string, teamResultId: string, patch: Partial<TeamResult>) {
+    withTeamResults(matchId, (trs) => trs.map((tr) => (tr.id === teamResultId ? { ...tr, ...patch } : tr)));
+  }
+
+  function removeTeamResult(matchId: string, teamResultId: string) {
+    withTeamResults(matchId, (trs) => trs.filter((tr) => tr.id !== teamResultId));
+  }
+
+  function patchPlayerResult(matchId: string, teamResultId: string, playerResultId: string, patch: Partial<PlayerResult>) {
+    withTeamResults(matchId, (trs) =>
+      trs.map((tr) =>
+        tr.id === teamResultId
+          ? { ...tr, playerResults: tr.playerResults.map((pr) => (pr.id === playerResultId ? { ...pr, ...patch } : pr)) }
+          : tr
+      )
+    );
+  }
+
+  function removePlayerResult(matchId: string, teamResultId: string, playerResultId: string) {
+    withTeamResults(matchId, (trs) =>
+      trs.map((tr) => (tr.id === teamResultId ? { ...tr, playerResults: tr.playerResults.filter((pr) => pr.id !== playerResultId) } : tr))
+    );
+  }
+
+  function patchMatch(matchId: string, patch: Partial<Match>) {
+    setMatches((prev) => prev.map((m) => (m.id === matchId ? { ...m, ...patch } : m)));
+  }
+
   async function confirmDeleteMatch() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
       await apiRequest(`/scrim-matches/${deleteTarget.id}`, { method: "DELETE" });
+      setMatches((prev) => prev.filter((m) => m.id !== deleteTarget.id));
       setDeleteTarget(null);
-      load();
     } finally {
       setDeleting(false);
     }
@@ -147,7 +183,13 @@ export function ScrimMatchesSection({ scrimId }: { scrimId: string }) {
               expanded={expandedId === match.id}
               onToggle={() => setExpandedId(expandedId === match.id ? null : match.id)}
               rosterPlayers={rosterPlayers}
-              onChanged={load}
+              onPatchTeamResult={(teamResultId, patch) => patchTeamResult(match.id, teamResultId, patch)}
+              onRemoveTeamResult={(teamResultId) => removeTeamResult(match.id, teamResultId)}
+              onPatchPlayerResult={(teamResultId, playerResultId, patch) =>
+                patchPlayerResult(match.id, teamResultId, playerResultId, patch)
+              }
+              onRemovePlayerResult={(teamResultId, playerResultId) => removePlayerResult(match.id, teamResultId, playerResultId)}
+              onPatchMatch={(patch) => patchMatch(match.id, patch)}
               onDelete={() => setDeleteTarget(match)}
             />
           ))
@@ -157,9 +199,9 @@ export function ScrimMatchesSection({ scrimId }: { scrimId: string }) {
       <Sheet open={addOpen} onClose={() => setAddOpen(false)} title="Ajouter un résultat de match">
         <AddMatchForm
           scrimId={scrimId}
-          onCreated={() => {
+          onCreated={(match) => {
             setAddOpen(false);
-            load();
+            setMatches((prev) => [...prev, match]);
           }}
         />
       </Sheet>
@@ -178,16 +220,73 @@ export function ScrimMatchesSection({ scrimId }: { scrimId: string }) {
   );
 }
 
-function AddMatchForm({ scrimId, onCreated }: { scrimId: string; onCreated: () => void }) {
+function CaptureInput({
+  label,
+  hint,
+  file,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  file: File | null;
+  onChange: (file: File | null) => void;
+}) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!file) {
+      setPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-sm font-medium text-foreground">{label}</label>
+      {previewUrl ? (
+        <div className="relative w-fit">
+          {/* eslint-disable-next-line @next/next/no-img-element -- aperçu local avant envoi, jamais une URL Cloudinary */}
+          <img src={previewUrl} alt={label} className="max-h-48 w-auto rounded-md border border-border object-contain" />
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            className="absolute -right-2 -top-2 flex size-6 items-center justify-center rounded-full bg-accent text-accent-foreground shadow"
+            aria-label="Retirer cette image"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      ) : (
+        <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border bg-muted px-3 py-2.5 text-sm text-muted-foreground hover:border-primary hover:text-primary">
+          <ImagePlus className="size-4 shrink-0" />
+          Choisir une image
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(e) => onChange(e.target.files?.[0] ?? null)}
+          />
+        </label>
+      )}
+      <p className="text-xs text-muted-foreground">{hint}</p>
+    </div>
+  );
+}
+
+function AddMatchForm({ scrimId, onCreated }: { scrimId: string; onCreated: (match: Match) => void }) {
   const [map, setMap] = useState<FreeFireMap>("BERMUDA");
-  const [files, setFiles] = useState<File[]>([]);
+  const [capture1, setCapture1] = useState<File | null>(null);
+  const [capture2, setCapture2] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (files.length === 0) {
-      setError("Ajoutez au moins une capture d'écran.");
+    if (!capture1 && !capture2) {
+      setError("Ajoutez au moins une capture.");
       return;
     }
     setError(null);
@@ -195,9 +294,10 @@ function AddMatchForm({ scrimId, onCreated }: { scrimId: string; onCreated: () =
     try {
       const formData = new FormData();
       formData.set("map", map);
-      files.forEach((file) => formData.append("images", file));
-      await apiRequest(`/scrim-matches/scrims/${scrimId}`, { method: "POST", body: formData });
-      onCreated();
+      if (capture1) formData.set("capture1", capture1);
+      if (capture2) formData.set("capture2", capture2);
+      const data = await apiRequest<{ match: Match }>(`/scrim-matches/scrims/${scrimId}`, { method: "POST", body: formData });
+      if (data?.match) onCreated(data.match);
     } catch {
       setError("Une erreur est survenue, réessayez.");
     } finally {
@@ -212,29 +312,18 @@ function AddMatchForm({ scrimId, onCreated }: { scrimId: string; onCreated: () =
         <Select value={map} onChange={(v) => setMap(v as FreeFireMap)} options={MAP_OPTIONS} />
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-foreground">Captures d&apos;écran du résultat</label>
-        <label
-          htmlFor="matchImages"
-          className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border bg-muted px-3 py-2.5 text-sm text-muted-foreground hover:border-primary hover:text-primary"
-        >
-          <ImagePlus className="size-4 shrink-0" />
-          {files.length > 0 ? `${files.length} image(s) sélectionnée(s)` : "Choisir une ou plusieurs images"}
-        </label>
-        <input
-          id="matchImages"
-          type="file"
-          multiple
-          accept="image/jpeg,image/png,image/webp"
-          className="hidden"
-          onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
-        />
-        <p className="text-xs text-muted-foreground">
-          Ajoutez plusieurs images si le classement complet est réparti sur plusieurs écrans (utile si des joueurs
-          se retrouvent capturés sur deux images à la fois — vous pourrez toujours corriger en relecture). Toute
-          image sans le logo Free Fire détecté est automatiquement ignorée.
-        </p>
-      </div>
+      <CaptureInput
+        label="Capture 1 — les 9 premières équipes, sans coupure"
+        hint="Le classement doit commencer à la 1ère place et aller jusqu'à la 9ème sans être coupé en plein milieu d'une ligne."
+        file={capture1}
+        onChange={setCapture1}
+      />
+      <CaptureInput
+        label="Capture 2 — depuis la 10ème équipe jusqu'à la fin"
+        hint="Le classement doit commencer au plus tard à la 10ème place et aller jusqu'à la dernière équipe sans être coupé."
+        file={capture2}
+        onChange={setCapture2}
+      />
 
       {error && <p className="text-sm text-accent">{error}</p>}
 
@@ -251,14 +340,22 @@ function MatchCard({
   expanded,
   onToggle,
   rosterPlayers,
-  onChanged,
+  onPatchTeamResult,
+  onRemoveTeamResult,
+  onPatchPlayerResult,
+  onRemovePlayerResult,
+  onPatchMatch,
   onDelete,
 }: {
   match: Match;
   expanded: boolean;
   onToggle: () => void;
   rosterPlayers: RosterPlayerOption[];
-  onChanged: () => void;
+  onPatchTeamResult: (teamResultId: string, patch: Partial<TeamResult>) => void;
+  onRemoveTeamResult: (teamResultId: string) => void;
+  onPatchPlayerResult: (teamResultId: string, playerResultId: string, patch: Partial<PlayerResult>) => void;
+  onRemovePlayerResult: (teamResultId: string, playerResultId: string) => void;
+  onPatchMatch: (patch: Partial<Match>) => void;
   onDelete: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
@@ -267,7 +364,7 @@ function MatchCard({
     setConfirming(true);
     try {
       await apiRequest(`/scrim-matches/${match.id}/confirm`, { method: "POST" });
-      onChanged();
+      onPatchMatch({ status: "CONFIRMED" });
     } finally {
       setConfirming(false);
     }
@@ -325,7 +422,16 @@ function MatchCard({
             <div className="flex flex-col gap-2">
               {registered.length === 0 && <p className="text-sm text-muted-foreground">Aucune.</p>}
               {registered.map((tr) => (
-                <TeamResultRow key={tr.id} matchId={match.id} teamResult={tr} rosterPlayers={rosterPlayers} onChanged={onChanged} />
+                <TeamResultRow
+                  key={tr.id}
+                  matchId={match.id}
+                  teamResult={tr}
+                  rosterPlayers={rosterPlayers}
+                  onPatchTeamResult={(patch) => onPatchTeamResult(tr.id, patch)}
+                  onRemoveTeamResult={() => onRemoveTeamResult(tr.id)}
+                  onPatchPlayerResult={(playerResultId, patch) => onPatchPlayerResult(tr.id, playerResultId, patch)}
+                  onRemovePlayerResult={(playerResultId) => onRemovePlayerResult(tr.id, playerResultId)}
+                />
               ))}
             </div>
           </div>
@@ -337,7 +443,16 @@ function MatchCard({
               </p>
               <div className="flex flex-col gap-2">
                 {unregistered.map((tr) => (
-                  <TeamResultRow key={tr.id} matchId={match.id} teamResult={tr} rosterPlayers={rosterPlayers} onChanged={onChanged} />
+                  <TeamResultRow
+                    key={tr.id}
+                    matchId={match.id}
+                    teamResult={tr}
+                    rosterPlayers={rosterPlayers}
+                    onPatchTeamResult={(patch) => onPatchTeamResult(tr.id, patch)}
+                    onRemoveTeamResult={() => onRemoveTeamResult(tr.id)}
+                    onPatchPlayerResult={(playerResultId, patch) => onPatchPlayerResult(tr.id, playerResultId, patch)}
+                    onRemovePlayerResult={(playerResultId) => onRemovePlayerResult(tr.id, playerResultId)}
+                  />
                 ))}
               </div>
             </div>
@@ -367,17 +482,49 @@ function TeamResultRow({
   matchId,
   teamResult,
   rosterPlayers,
-  onChanged,
+  onPatchTeamResult,
+  onRemoveTeamResult,
+  onPatchPlayerResult,
+  onRemovePlayerResult,
 }: {
   matchId: string;
   teamResult: TeamResult;
   rosterPlayers: RosterPlayerOption[];
-  onChanged: () => void;
+  onPatchTeamResult: (patch: Partial<TeamResult>) => void;
+  onRemoveTeamResult: () => void;
+  onPatchPlayerResult: (playerResultId: string, patch: Partial<PlayerResult>) => void;
+  onRemovePlayerResult: (playerResultId: string) => void;
 }) {
+  const [validating, setValidating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  async function toggleValidated() {
+    setValidating(true);
+    try {
+      const data = await apiRequest<{ teamResult: TeamResult }>(`/scrim-matches/${matchId}/team-results/${teamResult.id}`, {
+        method: "PATCH",
+        body: { validated: !teamResult.validated },
+      });
+      if (data?.teamResult) onPatchTeamResult(data.teamResult);
+    } finally {
+      setValidating(false);
+    }
+  }
+
+  async function remove() {
+    setDeleting(true);
+    try {
+      await apiRequest(`/scrim-matches/${matchId}/team-results/${teamResult.id}`, { method: "DELETE" });
+      onRemoveTeamResult();
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <div className={`rounded-lg border p-3 ${teamResult.validated ? "border-primary/40 bg-primary/5" : "border-border"}`}>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline">#{teamResult.placement}</Badge>
           {teamResult.team ? (
             <span className="text-sm font-medium text-foreground">
@@ -391,49 +538,31 @@ function TeamResultRow({
           <Badge variant="outline">{teamResult.killPoints} pts kills</Badge>
           <Badge>{teamResult.points} pts total</Badge>
         </div>
-        <ValidateTeamButton matchId={matchId} teamResultId={teamResult.id} validated={teamResult.validated} onChanged={onChanged} />
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant={teamResult.validated ? "outline" : "default"} onClick={toggleValidated} disabled={validating}>
+            {validating ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+            {teamResult.validated ? "Validé" : "Valider l'équipe"}
+          </Button>
+          <Button size="icon" variant="outline" onClick={remove} disabled={deleting} title="Supprimer cette équipe du résultat">
+            {deleting ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-col gap-1.5">
         {teamResult.playerResults.map((pr) => (
-          <PlayerResultRow key={pr.id} matchId={matchId} playerResult={pr} rosterPlayers={rosterPlayers} onChanged={onChanged} />
+          <PlayerResultRow
+            key={pr.id}
+            matchId={matchId}
+            playerResult={pr}
+            rosterPlayers={rosterPlayers}
+            onPatch={(patch) => onPatchPlayerResult(pr.id, patch)}
+            onRemove={() => onRemovePlayerResult(pr.id)}
+            onPatchTeam={onPatchTeamResult}
+          />
         ))}
       </div>
     </div>
-  );
-}
-
-function ValidateTeamButton({
-  matchId,
-  teamResultId,
-  validated,
-  onChanged,
-}: {
-  matchId: string;
-  teamResultId: string;
-  validated: boolean;
-  onChanged: () => void;
-}) {
-  const [saving, setSaving] = useState(false);
-
-  async function toggle() {
-    setSaving(true);
-    try {
-      await apiRequest(`/scrim-matches/${matchId}/team-results/${teamResultId}`, {
-        method: "PATCH",
-        body: { validated: !validated },
-      });
-      onChanged();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Button size="sm" variant={validated ? "outline" : "default"} onClick={toggle} disabled={saving}>
-      {saving ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-      {validated ? "Validé" : "Valider l'équipe"}
-    </Button>
   );
 }
 
@@ -441,33 +570,47 @@ function PlayerResultRow({
   matchId,
   playerResult,
   rosterPlayers,
-  onChanged,
+  onPatch,
+  onRemove,
+  onPatchTeam,
 }: {
   matchId: string;
   playerResult: PlayerResult;
   rosterPlayers: RosterPlayerOption[];
-  onChanged: () => void;
+  onPatch: (patch: Partial<PlayerResult>) => void;
+  onRemove: () => void;
+  onPatchTeam: (patch: Partial<TeamResult>) => void;
 }) {
   const [kills, setKills] = useState(String(playerResult.kills));
   const [savingKills, setSavingKills] = useState(false);
   const [reassigning, setReassigning] = useState(false);
   const [savingValidation, setSavingValidation] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    setKills(String(playerResult.kills));
+  }, [playerResult.kills]);
 
   const playerOptions = [
     PLAYER_OPTIONS_PLACEHOLDER,
     ...rosterPlayers.map((p) => ({ value: p.id, label: p.ffPseudo })),
   ];
 
+  async function applyPatch(body: { kills?: number; playerId?: string | null; validated?: boolean }) {
+    const data = await apiRequest<{ playerResult: PlayerResult; teamResult: TeamResult | null }>(
+      `/scrim-matches/${matchId}/player-results/${playerResult.id}`,
+      { method: "PATCH", body }
+    );
+    if (data?.playerResult) onPatch(data.playerResult);
+    if (data?.teamResult) onPatchTeam(data.teamResult);
+  }
+
   async function saveKills() {
     const value = Number(kills);
     if (!Number.isFinite(value) || value < 0) return;
     setSavingKills(true);
     try {
-      await apiRequest(`/scrim-matches/${matchId}/player-results/${playerResult.id}`, {
-        method: "PATCH",
-        body: { kills: value },
-      });
-      onChanged();
+      await applyPatch({ kills: value });
     } finally {
       setSavingKills(false);
     }
@@ -476,11 +619,7 @@ function PlayerResultRow({
   async function reassignPlayer(playerId: string) {
     setReassigning(true);
     try {
-      await apiRequest(`/scrim-matches/${matchId}/player-results/${playerResult.id}`, {
-        method: "PATCH",
-        body: { playerId: playerId || null },
-      });
-      onChanged();
+      await applyPatch({ playerId: playerId || null });
     } finally {
       setReassigning(false);
     }
@@ -489,13 +628,23 @@ function PlayerResultRow({
   async function toggleValidated() {
     setSavingValidation(true);
     try {
-      await apiRequest(`/scrim-matches/${matchId}/player-results/${playerResult.id}`, {
-        method: "PATCH",
-        body: { validated: !playerResult.validated },
-      });
-      onChanged();
+      await applyPatch({ validated: !playerResult.validated });
     } finally {
       setSavingValidation(false);
+    }
+  }
+
+  async function remove() {
+    setDeleting(true);
+    try {
+      const data = await apiRequest<{ teamResult: TeamResult | null }>(
+        `/scrim-matches/${matchId}/player-results/${playerResult.id}`,
+        { method: "DELETE" }
+      );
+      if (data?.teamResult) onPatchTeam(data.teamResult);
+      onRemove();
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -527,6 +676,9 @@ function PlayerResultRow({
       <Button size="sm" variant={playerResult.validated ? "outline" : "default"} onClick={toggleValidated} disabled={savingValidation}>
         {savingValidation ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
         {playerResult.validated ? "Validé" : "Valider"}
+      </Button>
+      <Button size="icon" variant="outline" onClick={remove} disabled={deleting} title="Supprimer ce joueur du résultat">
+        {deleting ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
       </Button>
     </div>
   );
