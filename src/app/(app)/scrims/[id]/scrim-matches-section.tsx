@@ -313,14 +313,14 @@ function AddMatchForm({ scrimId, onCreated }: { scrimId: string; onCreated: (mat
       </div>
 
       <CaptureInput
-        label="Capture 1 — les 9 premières équipes, sans coupure"
-        hint="Le classement doit commencer à la 1ère place et aller jusqu'à la 9ème sans être coupé en plein milieu d'une ligne."
+        label="Capture 1 — les 10 premières équipes, sans coupure"
+        hint="Le classement doit commencer à la 1ère place et aller jusqu'à la 10ème sans être coupé en plein milieu d'une ligne."
         file={capture1}
         onChange={setCapture1}
       />
       <CaptureInput
-        label="Capture 2 — depuis la 10ème équipe jusqu'à la fin"
-        hint="Le classement doit commencer au plus tard à la 10ème place et aller jusqu'à la dernière équipe sans être coupé."
+        label="Capture 2 — depuis la 11ème équipe jusqu'à la fin"
+        hint="Le classement doit commencer au plus tard à la 11ème place et aller jusqu'à la dernière équipe sans être coupé."
         file={capture2}
         onChange={setCapture2}
       />
