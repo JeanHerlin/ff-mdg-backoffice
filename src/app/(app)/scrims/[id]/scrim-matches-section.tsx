@@ -3,13 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   CheckCircle2,
-  ChevronDown,
-  ChevronUp,
   ImagePlus,
   Loader2,
   Plus,
   Trash2,
   TriangleAlert,
+  Trophy,
   X,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +18,7 @@ import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { TabList, TabButton } from "@/components/ui/tabs";
 import { apiRequest } from "@/lib/api-client";
 
 type FreeFireMap = "BERMUDA" | "PURGATORY" | "ALPINE" | "KALAHARI" | "NEXTERRA" | "SOLARA";
@@ -85,38 +85,139 @@ interface Match {
   id: string;
   map: FreeFireMap;
   matchNumber: number;
+  lobbyNumber: number;
   status: MatchStatus;
   images: MatchImage[];
   teamResults: TeamResult[];
 }
 
-export function ScrimMatchesSection({ scrimId }: { scrimId: string }) {
+interface StandingEntry {
+  teamId: string;
+  name: string;
+  tag: string;
+  logoUrl: string | null;
+  totalPoints: number;
+  totalPlacementPoints: number;
+  totalKillPoints: number;
+  totalKills: number;
+  matchesPlayed: number;
+  booyahCount: number;
+}
+
+function Logo({ url, label }: { url: string | null; label: string }) {
+  if (url) {
+    // eslint-disable-next-line @next/next/no-img-element -- image dynamique servie par Cloudinary
+    return <img src={url} alt={label} className="size-7 rounded-md object-cover" />;
+  }
+  return (
+    <div className="flex size-7 items-center justify-center rounded-md bg-primary/15 text-[10px] font-bold text-primary">
+      {label.slice(0, 2)}
+    </div>
+  );
+}
+
+function GlobalStandingsTable({ standings }: { standings: StandingEntry[] }) {
+  if (standings.length === 0) {
+    return <p className="text-sm text-muted-foreground">Aucun résultat confirmé pour le moment.</p>;
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+          <tr>
+            <th className="py-2 pr-3 font-medium">#</th>
+            <th className="py-2 pr-3 font-medium">Équipe</th>
+            <th className="py-2 pr-3 font-medium">Matchs</th>
+            <th className="py-2 pr-3 font-medium">Kills</th>
+            <th className="py-2 pr-3 font-medium">Pts placement</th>
+            <th className="py-2 pr-3 font-medium">Pts kills</th>
+            <th className="py-2 pr-3 font-medium">Booyah</th>
+            <th className="py-2 font-medium">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {standings.map((entry, idx) => (
+            <tr key={entry.teamId} className="border-b border-border last:border-0">
+              <td className="py-2 pr-3 text-muted-foreground">{idx + 1}</td>
+              <td className="py-2 pr-3">
+                <div className="flex items-center gap-2">
+                  <Logo url={entry.logoUrl} label={entry.tag} />
+                  <span className="font-medium text-foreground">
+                    {entry.name} <span className="text-muted-foreground">[{entry.tag}]</span>
+                  </span>
+                </div>
+              </td>
+              <td className="py-2 pr-3 text-muted-foreground">{entry.matchesPlayed}</td>
+              <td className="py-2 pr-3 text-muted-foreground">{entry.totalKills}</td>
+              <td className="py-2 pr-3 text-muted-foreground">{entry.totalPlacementPoints}</td>
+              <td className="py-2 pr-3 text-muted-foreground">{entry.totalKillPoints}</td>
+              <td className="py-2 pr-3 font-semibold text-foreground">{entry.booyahCount}</td>
+              <td className="py-2 font-semibold text-foreground">{entry.totalPoints}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function ScrimMatchesSection({ scrimId, lobbyMax }: { scrimId: string; lobbyMax: number }) {
   const [matches, setMatches] = useState<Match[]>([]);
+  const [lobbies, setLobbies] = useState<number[]>([]);
+  const [activeLobby, setActiveLobby] = useState<number | undefined>(undefined);
+  const [standings, setStandings] = useState<StandingEntry[]>([]);
+  const [activeTab, setActiveTab] = useState<string>("global");
   const [rosterPlayers, setRosterPlayers] = useState<RosterPlayerOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Match | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    Promise.all([
-      apiRequest<Match[]>(`/scrim-matches/scrims/${scrimId}`),
-      apiRequest<RosterPlayerOption[]>(`/scrim-matches/scrims/${scrimId}/roster`),
-    ])
-      .then(([matchData, rosterData]) => {
-        setMatches(matchData ?? []);
-        setRosterPlayers(rosterData ?? []);
-      })
-      .finally(() => setLoading(false));
+  const loadLobbies = useCallback(() => {
+    apiRequest<number[]>(`/scrim-matches/scrims/${scrimId}/lobbies`).then((data) => setLobbies(data ?? []));
   }, [scrimId]);
 
-  useEffect(load, [load]);
+  const loadMatchesAndStandings = useCallback(
+    (lobbyNumber: number | undefined) => {
+      setLoading(true);
+      const query = lobbyNumber !== undefined ? `?lobbyNumber=${lobbyNumber}` : "";
+      Promise.all([
+        apiRequest<Match[]>(`/scrim-matches/scrims/${scrimId}${query}`),
+        apiRequest<StandingEntry[]>(`/scrim-matches/scrims/${scrimId}/standings${query}`),
+      ])
+        .then(([matchData, standingsData]) => {
+          setMatches(matchData ?? []);
+          setStandings(standingsData ?? []);
+        })
+        .finally(() => setLoading(false));
+    },
+    [scrimId]
+  );
+
+  const loadStandingsOnly = useCallback(() => {
+    const query = activeLobby !== undefined ? `?lobbyNumber=${activeLobby}` : "";
+    apiRequest<StandingEntry[]>(`/scrim-matches/scrims/${scrimId}/standings${query}`).then((data) => setStandings(data ?? []));
+  }, [scrimId, activeLobby]);
+
+  useEffect(() => {
+    loadLobbies();
+    apiRequest<RosterPlayerOption[]>(`/scrim-matches/scrims/${scrimId}/roster`).then((data) => setRosterPlayers(data ?? []));
+  }, [scrimId, loadLobbies]);
+
+  useEffect(() => {
+    loadMatchesAndStandings(activeLobby);
+  }, [activeLobby, loadMatchesAndStandings]);
+
+  function selectLobby(lobbyNumber: number | undefined) {
+    setActiveLobby(lobbyNumber);
+    setActiveTab("global");
+  }
 
   // --- Mises à jour locales — jamais de rechargement complet après une
   // simple validation/édition/suppression, seulement après création ou
-  // suppression d'un match entier. ---
+  // suppression d'un match entier. Le classement global, lui, est
+  // recalculé côté serveur donc simplement re-fetché après toute mutation
+  // susceptible de le changer (confirmation, edition, suppression).
   function withTeamResults(matchId: string, updater: (teamResults: TeamResult[]) => TeamResult[]) {
     setMatches((prev) => prev.map((m) => (m.id === matchId ? { ...m, teamResults: updater(m.teamResults) } : m)));
   }
@@ -155,53 +256,98 @@ export function ScrimMatchesSection({ scrimId }: { scrimId: string }) {
     try {
       await apiRequest(`/scrim-matches/${deleteTarget.id}`, { method: "DELETE" });
       setMatches((prev) => prev.filter((m) => m.id !== deleteTarget.id));
+      if (activeTab === deleteTarget.id) setActiveTab("global");
       setDeleteTarget(null);
+      loadStandingsOnly();
     } finally {
       setDeleting(false);
     }
   }
 
+  const activeMatch = matches.find((m) => m.id === activeTab);
+
   return (
     <Card className="mt-6">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Résultats de matchs</CardTitle>
-        <Button size="sm" onClick={() => setAddOpen(true)}>
-          <Plus className="size-4" />
-          Ajouter un résultat
-        </Button>
+      <CardHeader className="gap-3">
+        <div className="flex flex-row items-center justify-between">
+          <CardTitle>Résultats de matchs</CardTitle>
+          <Button size="sm" onClick={() => setAddOpen(true)}>
+            <Plus className="size-4" />
+            Ajouter un résultat
+          </Button>
+        </div>
+
+        {lobbies.length > 1 && (
+          <TabList className="border-b-0">
+            <TabButton active={activeLobby === undefined} onClick={() => selectLobby(undefined)}>
+              Tous les lobbies
+            </TabButton>
+            {lobbies.map((n) => (
+              <TabButton key={n} active={activeLobby === n} onClick={() => selectLobby(n)}>
+                Lobby {n}
+              </TabButton>
+            ))}
+          </TabList>
+        )}
+
+        {!loading && (
+          <TabList>
+            <TabButton active={activeTab === "global"} onClick={() => setActiveTab("global")}>
+              <Trophy className="mr-1 inline size-3.5" />
+              Résultat global
+            </TabButton>
+            {matches.map((match) => (
+              <TabButton key={match.id} active={activeTab === match.id} onClick={() => setActiveTab(match.id)}>
+                Match #{match.matchNumber} — {MAP_LABEL[match.map]}
+              </TabButton>
+            ))}
+          </TabList>
+        )}
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {loading ? (
           <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
+        ) : activeTab === "global" ? (
+          <GlobalStandingsTable standings={standings} />
+        ) : activeMatch ? (
+          <MatchCard
+            match={activeMatch}
+            rosterPlayers={rosterPlayers}
+            onPatchTeamResult={(teamResultId, patch) => patchTeamResult(activeMatch.id, teamResultId, patch)}
+            onRemoveTeamResult={(teamResultId) => {
+              removeTeamResult(activeMatch.id, teamResultId);
+              loadStandingsOnly();
+            }}
+            onPatchPlayerResult={(teamResultId, playerResultId, patch) =>
+              patchPlayerResult(activeMatch.id, teamResultId, playerResultId, patch)
+            }
+            onRemovePlayerResult={(teamResultId, playerResultId) => {
+              removePlayerResult(activeMatch.id, teamResultId, playerResultId);
+              loadStandingsOnly();
+            }}
+            onPatchMatch={(patch) => {
+              patchMatch(activeMatch.id, patch);
+              loadStandingsOnly();
+            }}
+            onResultsChanged={loadStandingsOnly}
+            onDelete={() => setDeleteTarget(activeMatch)}
+          />
         ) : matches.length === 0 ? (
           <p className="text-sm text-muted-foreground">Aucun résultat de match enregistré.</p>
-        ) : (
-          matches.map((match) => (
-            <MatchCard
-              key={match.id}
-              match={match}
-              expanded={expandedId === match.id}
-              onToggle={() => setExpandedId(expandedId === match.id ? null : match.id)}
-              rosterPlayers={rosterPlayers}
-              onPatchTeamResult={(teamResultId, patch) => patchTeamResult(match.id, teamResultId, patch)}
-              onRemoveTeamResult={(teamResultId) => removeTeamResult(match.id, teamResultId)}
-              onPatchPlayerResult={(teamResultId, playerResultId, patch) =>
-                patchPlayerResult(match.id, teamResultId, playerResultId, patch)
-              }
-              onRemovePlayerResult={(teamResultId, playerResultId) => removePlayerResult(match.id, teamResultId, playerResultId)}
-              onPatchMatch={(patch) => patchMatch(match.id, patch)}
-              onDelete={() => setDeleteTarget(match)}
-            />
-          ))
-        )}
+        ) : null}
       </CardContent>
 
       <Sheet open={addOpen} onClose={() => setAddOpen(false)} title="Ajouter un résultat de match">
         <AddMatchForm
           scrimId={scrimId}
+          lobbyMax={lobbyMax}
+          defaultLobbyNumber={activeLobby ?? 1}
           onCreated={(match) => {
             setAddOpen(false);
-            setMatches((prev) => [...prev, match]);
+            setLobbies((prev) => [...new Set([...prev, match.lobbyNumber])].sort((a, b) => a - b));
+            if (activeLobby === undefined || match.lobbyNumber === activeLobby) {
+              setMatches((prev) => [...prev, match]);
+            }
           }}
         />
       </Sheet>
@@ -276,12 +422,28 @@ function CaptureInput({
   );
 }
 
-function AddMatchForm({ scrimId, onCreated }: { scrimId: string; onCreated: (match: Match) => void }) {
+function AddMatchForm({
+  scrimId,
+  lobbyMax,
+  defaultLobbyNumber,
+  onCreated,
+}: {
+  scrimId: string;
+  lobbyMax: number;
+  defaultLobbyNumber: number;
+  onCreated: (match: Match) => void;
+}) {
   const [map, setMap] = useState<FreeFireMap>("BERMUDA");
+  const [lobbyNumber, setLobbyNumber] = useState(String(Math.min(Math.max(defaultLobbyNumber, 1), Math.max(lobbyMax, 1))));
   const [capture1, setCapture1] = useState<File | null>(null);
   const [capture2, setCapture2] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const lobbyOptions = Array.from({ length: Math.max(lobbyMax, 1) }, (_, i) => ({
+    value: String(i + 1),
+    label: `Lobby ${i + 1}`,
+  }));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -294,6 +456,7 @@ function AddMatchForm({ scrimId, onCreated }: { scrimId: string; onCreated: (mat
     try {
       const formData = new FormData();
       formData.set("map", map);
+      formData.set("lobbyNumber", lobbyNumber);
       if (capture1) formData.set("capture1", capture1);
       if (capture2) formData.set("capture2", capture2);
       const data = await apiRequest<{ match: Match }>(`/scrim-matches/scrims/${scrimId}`, { method: "POST", body: formData });
@@ -307,9 +470,15 @@ function AddMatchForm({ scrimId, onCreated }: { scrimId: string; onCreated: (mat
 
   return (
     <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-foreground">Carte</label>
-        <Select value={map} onChange={(v) => setMap(v as FreeFireMap)} options={MAP_OPTIONS} />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-foreground">Carte</label>
+          <Select value={map} onChange={(v) => setMap(v as FreeFireMap)} options={MAP_OPTIONS} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-foreground">Lobby</label>
+          <Select value={lobbyNumber} onChange={setLobbyNumber} options={lobbyOptions} />
+        </div>
       </div>
 
       <CaptureInput
@@ -337,25 +506,23 @@ function AddMatchForm({ scrimId, onCreated }: { scrimId: string; onCreated: (mat
 
 function MatchCard({
   match,
-  expanded,
-  onToggle,
   rosterPlayers,
   onPatchTeamResult,
   onRemoveTeamResult,
   onPatchPlayerResult,
   onRemovePlayerResult,
   onPatchMatch,
+  onResultsChanged,
   onDelete,
 }: {
   match: Match;
-  expanded: boolean;
-  onToggle: () => void;
   rosterPlayers: RosterPlayerOption[];
   onPatchTeamResult: (teamResultId: string, patch: Partial<TeamResult>) => void;
   onRemoveTeamResult: (teamResultId: string) => void;
   onPatchPlayerResult: (teamResultId: string, playerResultId: string, patch: Partial<PlayerResult>) => void;
   onRemovePlayerResult: (teamResultId: string, playerResultId: string) => void;
   onPatchMatch: (patch: Partial<Match>) => void;
+  onResultsChanged: () => void;
   onDelete: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
@@ -375,103 +542,86 @@ function MatchCard({
   const hasInvalidImage = match.images.some((img) => !img.isValidFreeFireResult);
 
   return (
-    <div className="rounded-lg border border-border">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center justify-between gap-3 p-3 text-left hover:bg-muted/40"
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">Match #{match.matchNumber}</Badge>
-          <span className="text-sm font-medium text-foreground">{MAP_LABEL[match.map]}</span>
-          <Badge variant={match.status === "CONFIRMED" ? "default" : match.status === "PENDING_REVIEW" ? "muted" : "outline"}>
-            {STATUS_LABEL[match.status]}
-          </Badge>
+    <div className="flex flex-col gap-4">
+      {hasInvalidImage && (
+        <p className="flex items-center gap-1.5 text-xs text-accent">
+          <TriangleAlert className="size-3.5" />
+          Une ou plusieurs images n&apos;ont pas été prises en compte (signature Free Fire non détectée).
+        </p>
+      )}
+
+      {match.images.length > 0 && (
+        <div className="flex flex-col gap-3">
+          {match.images.map((img) => (
+            <a key={img.id} href={img.imageUrl} target="_blank" rel="noopener noreferrer" title="Ouvrir en plein écran">
+              {/* eslint-disable-next-line @next/next/no-img-element -- image dynamique Cloudinary */}
+              <img
+                src={img.imageUrl}
+                alt="Capture résultat"
+                className={`max-h-[70vh] w-full rounded-md border object-contain ${img.isValidFreeFireResult ? "border-border" : "border-accent opacity-50"}`}
+              />
+            </a>
+          ))}
         </div>
-        {expanded ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
-      </button>
+      )}
 
-      {expanded && (
-        <div className="flex flex-col gap-4 border-t border-border p-4">
-          {hasInvalidImage && (
-            <p className="flex items-center gap-1.5 text-xs text-accent">
-              <TriangleAlert className="size-3.5" />
-              Une ou plusieurs images n&apos;ont pas été prises en compte (signature Free Fire non détectée).
-            </p>
-          )}
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Équipes inscrites ({registered.length})
+        </p>
+        <div className="flex flex-col gap-2">
+          {registered.length === 0 && <p className="text-sm text-muted-foreground">Aucune.</p>}
+          {registered.map((tr) => (
+            <TeamResultRow
+              key={tr.id}
+              matchId={match.id}
+              teamResult={tr}
+              rosterPlayers={rosterPlayers}
+              onPatchTeamResult={(patch) => onPatchTeamResult(tr.id, patch)}
+              onRemoveTeamResult={() => onRemoveTeamResult(tr.id)}
+              onPatchPlayerResult={(playerResultId, patch) => onPatchPlayerResult(tr.id, playerResultId, patch)}
+              onRemovePlayerResult={(playerResultId) => onRemovePlayerResult(tr.id, playerResultId)}
+              onResultsChanged={onResultsChanged}
+            />
+          ))}
+        </div>
+      </div>
 
-          {match.images.length > 0 && (
-            <div className="flex flex-col gap-3">
-              {match.images.map((img) => (
-                <a key={img.id} href={img.imageUrl} target="_blank" rel="noopener noreferrer" title="Ouvrir en plein écran">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- image dynamique Cloudinary */}
-                  <img
-                    src={img.imageUrl}
-                    alt="Capture résultat"
-                    className={`max-h-[70vh] w-full rounded-md border object-contain ${img.isValidFreeFireResult ? "border-border" : "border-accent opacity-50"}`}
-                  />
-                </a>
-              ))}
-            </div>
-          )}
-
-          <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Équipes inscrites ({registered.length})
-            </p>
-            <div className="flex flex-col gap-2">
-              {registered.length === 0 && <p className="text-sm text-muted-foreground">Aucune.</p>}
-              {registered.map((tr) => (
-                <TeamResultRow
-                  key={tr.id}
-                  matchId={match.id}
-                  teamResult={tr}
-                  rosterPlayers={rosterPlayers}
-                  onPatchTeamResult={(patch) => onPatchTeamResult(tr.id, patch)}
-                  onRemoveTeamResult={() => onRemoveTeamResult(tr.id)}
-                  onPatchPlayerResult={(playerResultId, patch) => onPatchPlayerResult(tr.id, playerResultId, patch)}
-                  onRemovePlayerResult={(playerResultId) => onRemovePlayerResult(tr.id, playerResultId)}
-                />
-              ))}
-            </div>
-          </div>
-
-          {unregistered.length > 0 && (
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Équipes non inscrites / non reconnues ({unregistered.length})
-              </p>
-              <div className="flex flex-col gap-2">
-                {unregistered.map((tr) => (
-                  <TeamResultRow
-                    key={tr.id}
-                    matchId={match.id}
-                    teamResult={tr}
-                    rosterPlayers={rosterPlayers}
-                    onPatchTeamResult={(patch) => onPatchTeamResult(tr.id, patch)}
-                    onRemoveTeamResult={() => onRemoveTeamResult(tr.id)}
-                    onPatchPlayerResult={(playerResultId, patch) => onPatchPlayerResult(tr.id, playerResultId, patch)}
-                    onRemovePlayerResult={(playerResultId) => onRemovePlayerResult(tr.id, playerResultId)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="flex justify-end gap-2 border-t border-border pt-3">
-            <Button variant="outline" size="sm" onClick={onDelete}>
-              <Trash2 className="size-4" />
-              Supprimer
-            </Button>
-            {match.status !== "CONFIRMED" && (
-              <Button size="sm" onClick={confirmMatch} disabled={confirming}>
-                {confirming ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-                Confirmer ce match
-              </Button>
-            )}
+      {unregistered.length > 0 && (
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Équipes non inscrites / non reconnues ({unregistered.length})
+          </p>
+          <div className="flex flex-col gap-2">
+            {unregistered.map((tr) => (
+              <TeamResultRow
+                key={tr.id}
+                matchId={match.id}
+                teamResult={tr}
+                rosterPlayers={rosterPlayers}
+                onPatchTeamResult={(patch) => onPatchTeamResult(tr.id, patch)}
+                onRemoveTeamResult={() => onRemoveTeamResult(tr.id)}
+                onPatchPlayerResult={(playerResultId, patch) => onPatchPlayerResult(tr.id, playerResultId, patch)}
+                onRemovePlayerResult={(playerResultId) => onRemovePlayerResult(tr.id, playerResultId)}
+                onResultsChanged={onResultsChanged}
+              />
+            ))}
           </div>
         </div>
       )}
+
+      <div className="flex justify-end gap-2 border-t border-border pt-3">
+        <Button variant="outline" size="sm" onClick={onDelete}>
+          <Trash2 className="size-4" />
+          Supprimer
+        </Button>
+        {match.status !== "CONFIRMED" && (
+          <Button size="sm" onClick={confirmMatch} disabled={confirming}>
+            {confirming ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+            Confirmer ce match
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
@@ -486,6 +636,7 @@ function TeamResultRow({
   onRemoveTeamResult,
   onPatchPlayerResult,
   onRemovePlayerResult,
+  onResultsChanged,
 }: {
   matchId: string;
   teamResult: TeamResult;
@@ -494,6 +645,7 @@ function TeamResultRow({
   onRemoveTeamResult: () => void;
   onPatchPlayerResult: (playerResultId: string, patch: Partial<PlayerResult>) => void;
   onRemovePlayerResult: (playerResultId: string) => void;
+  onResultsChanged: () => void;
 }) {
   const [validating, setValidating] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -516,6 +668,7 @@ function TeamResultRow({
     try {
       await apiRequest(`/scrim-matches/${matchId}/team-results/${teamResult.id}`, { method: "DELETE" });
       onRemoveTeamResult();
+      onResultsChanged();
     } finally {
       setDeleting(false);
     }
@@ -559,6 +712,7 @@ function TeamResultRow({
             onPatch={(patch) => onPatchPlayerResult(pr.id, patch)}
             onRemove={() => onRemovePlayerResult(pr.id)}
             onPatchTeam={onPatchTeamResult}
+            onResultsChanged={onResultsChanged}
           />
         ))}
       </div>
@@ -573,6 +727,7 @@ function PlayerResultRow({
   onPatch,
   onRemove,
   onPatchTeam,
+  onResultsChanged,
 }: {
   matchId: string;
   playerResult: PlayerResult;
@@ -580,6 +735,7 @@ function PlayerResultRow({
   onPatch: (patch: Partial<PlayerResult>) => void;
   onRemove: () => void;
   onPatchTeam: (patch: Partial<TeamResult>) => void;
+  onResultsChanged: () => void;
 }) {
   const [kills, setKills] = useState(String(playerResult.kills));
   const [savingKills, setSavingKills] = useState(false);
@@ -603,6 +759,7 @@ function PlayerResultRow({
     );
     if (data?.playerResult) onPatch(data.playerResult);
     if (data?.teamResult) onPatchTeam(data.teamResult);
+    onResultsChanged();
   }
 
   async function saveKills() {
@@ -643,6 +800,7 @@ function PlayerResultRow({
       );
       if (data?.teamResult) onPatchTeam(data.teamResult);
       onRemove();
+      onResultsChanged();
     } finally {
       setDeleting(false);
     }

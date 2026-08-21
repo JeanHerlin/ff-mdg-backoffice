@@ -630,7 +630,9 @@ export function ScrimDetail() {
         </div>
       )}
 
-      {(scrim.phase === "STARTED" || scrim.phase === "FINISHED") && <ScrimMatchesSection scrimId={params.id} />}
+      {(scrim.phase === "STARTED" || scrim.phase === "FINISHED") && (
+        <ScrimMatchesSection scrimId={params.id} lobbyMax={scrim.lobbyMax} />
+      )}
 
       <ConfirmDialog
         open={deleteOpen}
