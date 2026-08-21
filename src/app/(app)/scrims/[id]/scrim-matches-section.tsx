@@ -9,6 +9,7 @@ import {
   Trash2,
   TriangleAlert,
   Trophy,
+  UserPlus,
   X,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +20,9 @@ import { Input } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TabList, TabButton } from "@/components/ui/tabs";
-import { apiRequest } from "@/lib/api-client";
+import { apiRequest, ApiError } from "@/lib/api-client";
+
+const MAX_PLAYERS_PER_TEAM = 4;
 
 type FreeFireMap = "BERMUDA" | "PURGATORY" | "ALPINE" | "KALAHARI" | "NEXTERRA" | "SOLARA";
 type MatchStatus = "PROCESSING" | "PENDING_REVIEW" | "CONFIRMED";
@@ -43,6 +46,7 @@ const STATUS_LABEL: Record<MatchStatus, string> = {
 interface RosterPlayerOption {
   id: string;
   ffPseudo: string;
+  teamId: string;
 }
 
 interface PlayerResult {
@@ -530,8 +534,11 @@ function MatchCard({
   async function confirmMatch() {
     setConfirming(true);
     try {
-      await apiRequest(`/scrim-matches/${match.id}/confirm`, { method: "POST" });
-      onPatchMatch({ status: "CONFIRMED" });
+      // Confirmer valide aussi toutes les équipes et tous les joueurs côté
+      // serveur — on reprend le match complet renvoyé plutôt qu'un simple
+      // changement de statut, pour refléter ces validations en cascade.
+      const data = await apiRequest<{ match: Match }>(`/scrim-matches/${match.id}/confirm`, { method: "POST" });
+      onPatchMatch(data?.match ?? { status: "CONFIRMED" });
     } finally {
       setConfirming(false);
     }
@@ -716,6 +723,82 @@ function TeamResultRow({
           />
         ))}
       </div>
+
+      <AddPlayerToTeam
+        matchId={matchId}
+        teamResult={teamResult}
+        rosterPlayers={rosterPlayers}
+        onAdded={(updated) => {
+          onPatchTeamResult(updated);
+          onResultsChanged();
+        }}
+      />
+    </div>
+  );
+}
+
+// Filet de secours si l'OCR a raté un joueur — le vivier de CETTE équipe
+// (déduit du roster du scrim) est proposé en priorité pour éviter de
+// chercher le bon joueur dans toute la liste. Masqué dès 4 joueurs (max
+// d'une équipe Free Fire).
+function AddPlayerToTeam({
+  matchId,
+  teamResult,
+  rosterPlayers,
+  onAdded,
+}: {
+  matchId: string;
+  teamResult: TeamResult;
+  rosterPlayers: RosterPlayerOption[];
+  onAdded: (teamResult: TeamResult) => void;
+}) {
+  const alreadyUsed = new Set(teamResult.playerResults.map((pr) => pr.playerId).filter((id): id is string => !!id));
+  const teamMembers = rosterPlayers.filter((p) => teamResult.teamId && p.teamId === teamResult.teamId && !alreadyUsed.has(p.id));
+  const others = rosterPlayers.filter((p) => !teamMembers.includes(p) && !alreadyUsed.has(p.id));
+  const options = [...teamMembers, ...others].map((p) => ({ value: p.id, label: p.ffPseudo }));
+
+  const [playerId, setPlayerId] = useState(options[0]?.value ?? "");
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!options.some((o) => o.value === playerId)) setPlayerId(options[0]?.value ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ne dépend que de la liste d'options disponibles
+  }, [options.length]);
+
+  if (teamResult.playerResults.length >= MAX_PLAYERS_PER_TEAM) return null;
+
+  async function add() {
+    if (!playerId) return;
+    setAdding(true);
+    setError(null);
+    try {
+      const data = await apiRequest<{ teamResult: TeamResult }>(
+        `/scrim-matches/${matchId}/team-results/${teamResult.id}/player-results`,
+        { method: "POST", body: { playerId } }
+      );
+      if (data?.teamResult) onAdded(data.teamResult);
+    } catch (err) {
+      setError(err instanceof ApiError && err.message === "scrimMatches.team_full" ? "Cette équipe a déjà 4 joueurs." : "Une erreur est survenue.");
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-dashed border-border pt-2">
+      {options.length === 0 ? (
+        <p className="text-xs text-muted-foreground">Aucun joueur du roster disponible à ajouter.</p>
+      ) : (
+        <>
+          <Select value={playerId} onChange={setPlayerId} options={options} className="w-44" disabled={adding} />
+          <Button size="sm" variant="outline" onClick={add} disabled={adding || !playerId}>
+            {adding ? <Loader2 className="size-3.5 animate-spin" /> : <UserPlus className="size-3.5" />}
+            Ajouter un joueur
+          </Button>
+        </>
+      )}
+      {error && <span className="text-xs text-accent">{error}</span>}
     </div>
   );
 }
