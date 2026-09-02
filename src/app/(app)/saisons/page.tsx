@@ -1,13 +1,17 @@
-import { ComingSoon } from "@/components/coming-soon";
+import { SeasonsTable } from "./seasons-table";
 
 export const metadata = { title: "Saisons" };
 
-export default function SeasonsPage() {
+export default function SeasonsAdminPage() {
   return (
-    <ComingSoon
-      module="Module 6 — Saisons"
-      title="Gestion des saisons"
-      description="Création et clôture des saisons, verrouillage des compositions d'équipe, renouvellement des points de placement."
-    />
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Saisons</h1>
+        <p className="text-sm text-muted-foreground">
+          Une seule saison active à la fois — le mercato se ferme à son démarrage et rouvre à sa clôture.
+        </p>
+      </div>
+      <SeasonsTable />
+    </div>
   );
 }
