@@ -18,6 +18,7 @@ interface SeasonSummary {
   id: string;
   name: string;
   startAt: string;
+  endAt: string;
   closedAt: string | null;
   phase: Phase;
 }
@@ -36,6 +37,18 @@ const PHASE_VARIANT: Record<Phase, "default" | "muted" | "accent" | "outline"> =
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+// Durée PRÉVUE (startAt -> endAt), pas la durée réelle une fois clôturée —
+// arrondie au mois inférieur, en jours si ça ne fait pas un mois complet.
+function formatDuration(startIso: string, endIso: string) {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  let months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+  if (end.getDate() < start.getDate()) months -= 1;
+  if (months >= 1) return `${months} mois`;
+  const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+  return `${days} jour${days > 1 ? "s" : ""}`;
 }
 
 export function SeasonsTable() {
@@ -74,6 +87,7 @@ export function SeasonsTable() {
               <tr>
                 <th className="px-4 py-3 font-medium">Saison</th>
                 <th className="px-4 py-3 font-medium">Début</th>
+                <th className="px-4 py-3 font-medium">Durée prévue</th>
                 <th className="px-4 py-3 font-medium">Clôturée le</th>
                 <th className="px-4 py-3 font-medium">Statut</th>
               </tr>
@@ -81,13 +95,13 @@ export function SeasonsTable() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">
+                  <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
                     <Loader2 className="mx-auto size-5 animate-spin" />
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">
+                  <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
                     Aucune saison pour le moment.
                   </td>
                 </tr>
@@ -100,6 +114,7 @@ export function SeasonsTable() {
                   >
                     <td className="px-4 py-3 font-medium text-foreground">{season.name}</td>
                     <td className="px-4 py-3 text-muted-foreground">{formatDate(season.startAt)}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{formatDuration(season.startAt, season.endAt)}</td>
                     <td className="px-4 py-3 text-muted-foreground">{season.closedAt ? formatDate(season.closedAt) : "—"}</td>
                     <td className="px-4 py-3">
                       <Badge variant={PHASE_VARIANT[season.phase]}>{PHASE_LABEL[season.phase]}</Badge>
@@ -147,13 +162,20 @@ export function SeasonsTable() {
 function CreateSeasonForm({ onCreated }: { onCreated: () => void }) {
   const [name, setName] = useState("");
   const [startAt, setStartAt] = useState("");
+  const [endAt, setEndAt] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const duration = startAt && endAt ? formatDuration(startAt, endAt) : null;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!startAt) {
-      setError("Choisissez une date et une heure de début.");
+    if (!startAt || !endAt) {
+      setError("Choisissez une date de début et une date de fin prévue.");
+      return;
+    }
+    if (new Date(startAt) >= new Date(endAt)) {
+      setError("La fin prévue doit être après le début.");
       return;
     }
     setError(null);
@@ -161,14 +183,16 @@ function CreateSeasonForm({ onCreated }: { onCreated: () => void }) {
     try {
       await apiRequest("/seasons", {
         method: "POST",
-        body: { name: name.trim(), startAt: new Date(startAt).toISOString() },
+        body: { name: name.trim(), startAt: new Date(startAt).toISOString(), endAt: new Date(endAt).toISOString() },
       });
       onCreated();
     } catch (err) {
       setError(
         err instanceof ApiError && err.message === "seasons.already_open"
           ? "Une saison est déjà en cours ou à venir — clôturez-la avant d'en créer une nouvelle."
-          : "Une erreur est survenue, réessayez."
+          : err instanceof ApiError && err.message === "seasons.dates_invalid"
+            ? "La fin prévue doit être après le début."
+            : "Une erreur est survenue, réessayez."
       );
     } finally {
       setSaving(false);
@@ -195,6 +219,15 @@ function CreateSeasonForm({ onCreated }: { onCreated: () => void }) {
         <DateTimePicker id="season-start" value={startAt} onChange={setStartAt} />
         <p className="text-xs text-muted-foreground">
           Le mercato se ferme automatiquement à cette date et rouvrira à la clôture de la saison.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="season-end">Fin prévue de la saison</Label>
+        <DateTimePicker id="season-end" value={endAt} onChange={setEndAt} />
+        <p className="text-xs text-muted-foreground">
+          Indicative — la saison ne se termine réellement qu'à sa clôture manuelle.
+          {duration && ` Durée prévue : ${duration}.`}
         </p>
       </div>
 

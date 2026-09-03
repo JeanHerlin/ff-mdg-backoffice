@@ -15,6 +15,7 @@ interface SeasonData {
   id: string;
   name: string;
   startAt: string;
+  endAt: string;
   closedAt: string | null;
   phase: Phase;
 }
@@ -46,6 +47,19 @@ const PHASE_VARIANT: Record<Phase, "default" | "muted" | "accent" | "outline"> =
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+// Durée PRÉVUE (startAt -> endAt) — arrondie au mois inférieur, en jours si
+// ça ne fait pas un mois complet. Purement indicative : la durée réelle
+// dépend de la clôture manuelle, jamais de endAt.
+function formatDuration(startIso: string, endIso: string) {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  let months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+  if (end.getDate() < start.getDate()) months -= 1;
+  if (months >= 1) return `${months} mois`;
+  const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+  return `${days} jour${days > 1 ? "s" : ""}`;
 }
 
 function Logo({ url, label }: { url: string | null; label: string }) {
@@ -113,7 +127,8 @@ export function SeasonDetail() {
             <Badge variant={PHASE_VARIANT[season.phase]}>{PHASE_LABEL[season.phase]}</Badge>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Début : {formatDate(season.startAt)}
+            Début : {formatDate(season.startAt)} · Durée prévue : {formatDuration(season.startAt, season.endAt)} (fin prévue le{" "}
+            {formatDate(season.endAt)})
             {season.closedAt && ` — Clôturée le ${formatDate(season.closedAt)}`}
           </p>
         </div>
