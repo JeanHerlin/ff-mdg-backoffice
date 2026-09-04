@@ -28,7 +28,7 @@ interface PlayerSummary {
 
 interface TransferRequest {
   id: string;
-  type: "TRANSFER" | "RELEASE";
+  type: "TRANSFER" | "RELEASE" | "SIGNING";
   status: TransferStatus;
   initiatedBy: "PLAYER" | "CAPTAIN";
   imageUrl: string | null;
@@ -38,7 +38,8 @@ interface TransferRequest {
   resolvedAt: string | null;
   player: PlayerSummary;
   initiator: PlayerSummary;
-  fromTeam: TeamSummary;
+  // Nul pour un SIGNING (joueur libre avec historique, pas d'équipe de départ).
+  fromTeam: TeamSummary | null;
   toTeam: TeamSummary | null;
 }
 
@@ -80,14 +81,21 @@ function TeamLogo({ url, label }: { url: string | null; label: string }) {
   );
 }
 
-function TransferRoute({ fromTeam, toTeam }: { fromTeam: TeamSummary; toTeam: TeamSummary | null }) {
+function TransferRoute({ fromTeam, toTeam }: { fromTeam: TeamSummary | null; toTeam: TeamSummary | null }) {
   return (
     <div className="flex items-center justify-center gap-4 rounded-lg border border-border p-4">
-      <div className="flex flex-col items-center gap-1.5 text-center">
-        <TeamLogo url={fromTeam.logoUrl} label={fromTeam.tag} />
-        <p className="text-xs font-medium text-foreground">{fromTeam.name}</p>
-        <p className="text-[11px] text-muted-foreground">[{fromTeam.tag}]</p>
-      </div>
+      {fromTeam ? (
+        <div className="flex flex-col items-center gap-1.5 text-center">
+          <TeamLogo url={fromTeam.logoUrl} label={fromTeam.tag} />
+          <p className="text-xs font-medium text-foreground">{fromTeam.name}</p>
+          <p className="text-[11px] text-muted-foreground">[{fromTeam.tag}]</p>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-1.5 text-center text-muted-foreground">
+          <div className="flex size-9 items-center justify-center rounded-md border border-dashed border-border">—</div>
+          <p className="text-xs italic">Agent libre</p>
+        </div>
+      )}
       <ArrowRight className="size-5 shrink-0 text-muted-foreground" />
       {toTeam ? (
         <div className="flex flex-col items-center gap-1.5 text-center">
@@ -257,7 +265,7 @@ export function MercatoTable() {
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       <div className="flex items-center gap-1.5">
-                        <span>[{request.fromTeam.tag}]</span>
+                        <span>{request.fromTeam ? `[${request.fromTeam.tag}]` : "Agent libre"}</span>
                         {request.toTeam ? (
                           <>
                             <ArrowRight className="size-3.5" />
@@ -382,9 +390,11 @@ export function MercatoTable() {
         }}
         title="Approuver ce transfert ?"
         description={
-          selected?.toTeam
+          selected?.toTeam && selected.fromTeam
             ? `${playerLabel(selected.player)} quittera [${selected.fromTeam.tag}] et rejoindra [${selected.toTeam.tag}] immédiatement.`
-            : `${selected ? playerLabel(selected.player) : "Ce joueur"} quittera son équipe et deviendra agent libre.`
+            : selected?.toTeam
+              ? `${playerLabel(selected.player)} rejoindra [${selected.toTeam.tag}] immédiatement.`
+              : `${selected ? playerLabel(selected.player) : "Ce joueur"} quittera son équipe et deviendra agent libre.`
         }
         confirmLabel="Approuver"
         loading={resolving}
