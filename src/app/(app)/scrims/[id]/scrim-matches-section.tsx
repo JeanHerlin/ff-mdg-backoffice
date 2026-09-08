@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   CheckCircle2,
+  Crown,
   ImagePlus,
   Loader2,
   Plus,
@@ -93,6 +94,7 @@ interface Match {
   status: MatchStatus;
   images: MatchImage[];
   teamResults: TeamResult[];
+  mvpPlayerResultId: string | null;
 }
 
 interface StandingEntry {
@@ -437,10 +439,12 @@ function AddMatchForm({
   defaultLobbyNumber: number;
   onCreated: (match: Match) => void;
 }) {
+  const [mode, setMode] = useState<"captures" | "text">("captures");
   const [map, setMap] = useState<FreeFireMap>("BERMUDA");
   const [lobbyNumber, setLobbyNumber] = useState(String(Math.min(Math.max(defaultLobbyNumber, 1), Math.max(lobbyMax, 1))));
   const [capture1, setCapture1] = useState<File | null>(null);
   const [capture2, setCapture2] = useState<File | null>(null);
+  const [resultFile, setResultFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -451,8 +455,12 @@ function AddMatchForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!capture1 && !capture2) {
+    if (mode === "captures" && !capture1 && !capture2) {
       setError("Ajoutez au moins une capture.");
+      return;
+    }
+    if (mode === "text" && !resultFile) {
+      setError("Ajoutez le fichier de résultat.");
       return;
     }
     setError(null);
@@ -461,12 +469,22 @@ function AddMatchForm({
       const formData = new FormData();
       formData.set("map", map);
       formData.set("lobbyNumber", lobbyNumber);
-      if (capture1) formData.set("capture1", capture1);
-      if (capture2) formData.set("capture2", capture2);
-      const data = await apiRequest<{ match: Match }>(`/scrim-matches/scrims/${scrimId}`, { method: "POST", body: formData });
+      let data: { match: Match } | undefined;
+      if (mode === "captures") {
+        if (capture1) formData.set("capture1", capture1);
+        if (capture2) formData.set("capture2", capture2);
+        data = await apiRequest<{ match: Match }>(`/scrim-matches/scrims/${scrimId}`, { method: "POST", body: formData });
+      } else {
+        formData.set("resultFile", resultFile!);
+        data = await apiRequest<{ match: Match }>(`/scrim-matches/scrims/${scrimId}/text`, { method: "POST", body: formData });
+      }
       if (data?.match) onCreated(data.match);
-    } catch {
-      setError("Une erreur est survenue, réessayez.");
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.message === "scrimMatches.text_result_unreadable"
+          ? "Ce fichier ne contient aucun résultat reconnaissable (format inattendu)."
+          : "Une erreur est survenue, réessayez."
+      );
     } finally {
       setSubmitting(false);
     }
@@ -474,6 +492,18 @@ function AddMatchForm({
 
   return (
     <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-foreground">Source du résultat</label>
+        <div className="flex gap-2">
+          <Button type="button" size="sm" variant={mode === "captures" ? "default" : "outline"} onClick={() => setMode("captures")}>
+            Captures d&apos;écran
+          </Button>
+          <Button type="button" size="sm" variant={mode === "text" ? "default" : "outline"} onClick={() => setMode("text")}>
+            Fichier texte (scrim 3D)
+          </Button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-foreground">Carte</label>
@@ -485,24 +515,46 @@ function AddMatchForm({
         </div>
       </div>
 
-      <CaptureInput
-        label="Capture 1 — les 10 premières équipes, sans coupure"
-        hint="Le classement doit commencer à la 1ère place et aller jusqu'à la 10ème sans être coupé en plein milieu d'une ligne."
-        file={capture1}
-        onChange={setCapture1}
-      />
-      <CaptureInput
-        label="Capture 2 — depuis la 11ème équipe jusqu'à la fin"
-        hint="Le classement doit commencer au plus tard à la 11ème place et aller jusqu'à la dernière équipe sans être coupé."
-        file={capture2}
-        onChange={setCapture2}
-      />
+      {mode === "captures" ? (
+        <>
+          <CaptureInput
+            label="Capture 1 — les 10 premières équipes, sans coupure"
+            hint="Le classement doit commencer à la 1ère place et aller jusqu'à la 10ème sans être coupé en plein milieu d'une ligne."
+            file={capture1}
+            onChange={setCapture1}
+          />
+          <CaptureInput
+            label="Capture 2 — depuis la 11ème équipe jusqu'à la fin"
+            hint="Le classement doit commencer au plus tard à la 11ème place et aller jusqu'à la dernière équipe sans être coupé."
+            file={capture2}
+            onChange={setCapture2}
+          />
+        </>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-foreground">Fichier de résultat (.txt / .log)</label>
+          <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border bg-muted px-3 py-2.5 text-sm text-muted-foreground hover:border-primary hover:text-primary">
+            <ImagePlus className="size-4 shrink-0" />
+            {resultFile ? resultFile.name : "Choisir un fichier"}
+            <input
+              type="file"
+              accept=".txt,.log,text/plain"
+              className="hidden"
+              onChange={(e) => setResultFile(e.target.files?.[0] ?? null)}
+            />
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Le fichier exporté par la room contient l&apos;ID Free Fire exact de chaque joueur — la reconnaissance
+            est donc plus précise qu&apos;avec des captures.
+          </p>
+        </div>
+      )}
 
       {error && <p className="text-sm text-accent">{error}</p>}
 
       <Button type="submit" disabled={submitting}>
         {submitting && <Loader2 className="size-4 animate-spin" />}
-        Analyser et créer le résultat
+        {mode === "captures" ? "Analyser et créer le résultat" : "Importer et créer le résultat"}
       </Button>
     </form>
   );
@@ -548,6 +600,14 @@ function MatchCard({
   const unregistered = match.teamResults.filter((t) => !t.isRegistered);
   const hasInvalidImage = match.images.some((img) => !img.isValidFreeFireResult);
 
+  async function setMvp(playerResultId: string | null) {
+    const data = await apiRequest<{ match: Match }>(`/scrim-matches/${match.id}/mvp`, {
+      method: "PATCH",
+      body: { playerResultId },
+    });
+    if (data?.match) onPatchMatch({ mvpPlayerResultId: data.match.mvpPlayerResultId });
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {hasInvalidImage && (
@@ -584,6 +644,8 @@ function MatchCard({
               matchId={match.id}
               teamResult={tr}
               rosterPlayers={rosterPlayers}
+              mvpPlayerResultId={match.mvpPlayerResultId}
+              onSetMvp={setMvp}
               onPatchTeamResult={(patch) => onPatchTeamResult(tr.id, patch)}
               onRemoveTeamResult={() => onRemoveTeamResult(tr.id)}
               onPatchPlayerResult={(playerResultId, patch) => onPatchPlayerResult(tr.id, playerResultId, patch)}
@@ -606,6 +668,8 @@ function MatchCard({
                 matchId={match.id}
                 teamResult={tr}
                 rosterPlayers={rosterPlayers}
+                mvpPlayerResultId={match.mvpPlayerResultId}
+                onSetMvp={setMvp}
                 onPatchTeamResult={(patch) => onPatchTeamResult(tr.id, patch)}
                 onRemoveTeamResult={() => onRemoveTeamResult(tr.id)}
                 onPatchPlayerResult={(playerResultId, patch) => onPatchPlayerResult(tr.id, playerResultId, patch)}
@@ -639,6 +703,8 @@ function TeamResultRow({
   matchId,
   teamResult,
   rosterPlayers,
+  mvpPlayerResultId,
+  onSetMvp,
   onPatchTeamResult,
   onRemoveTeamResult,
   onPatchPlayerResult,
@@ -648,6 +714,8 @@ function TeamResultRow({
   matchId: string;
   teamResult: TeamResult;
   rosterPlayers: RosterPlayerOption[];
+  mvpPlayerResultId: string | null;
+  onSetMvp: (playerResultId: string | null) => Promise<void>;
   onPatchTeamResult: (patch: Partial<TeamResult>) => void;
   onRemoveTeamResult: () => void;
   onPatchPlayerResult: (playerResultId: string, patch: Partial<PlayerResult>) => void;
@@ -716,6 +784,8 @@ function TeamResultRow({
             matchId={matchId}
             playerResult={pr}
             rosterPlayers={rosterPlayers}
+            isMvp={mvpPlayerResultId === pr.id}
+            onSetMvp={onSetMvp}
             onPatch={(patch) => onPatchPlayerResult(pr.id, patch)}
             onRemove={() => onRemovePlayerResult(pr.id)}
             onPatchTeam={onPatchTeamResult}
@@ -807,6 +877,8 @@ function PlayerResultRow({
   matchId,
   playerResult,
   rosterPlayers,
+  isMvp,
+  onSetMvp,
   onPatch,
   onRemove,
   onPatchTeam,
@@ -815,6 +887,8 @@ function PlayerResultRow({
   matchId: string;
   playerResult: PlayerResult;
   rosterPlayers: RosterPlayerOption[];
+  isMvp: boolean;
+  onSetMvp: (playerResultId: string | null) => Promise<void>;
   onPatch: (patch: Partial<PlayerResult>) => void;
   onRemove: () => void;
   onPatchTeam: (patch: Partial<TeamResult>) => void;
@@ -824,7 +898,18 @@ function PlayerResultRow({
   const [savingKills, setSavingKills] = useState(false);
   const [reassigning, setReassigning] = useState(false);
   const [savingValidation, setSavingValidation] = useState(false);
+  const [savingMvp, setSavingMvp] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  async function toggleMvp() {
+    if (!playerResult.playerId) return;
+    setSavingMvp(true);
+    try {
+      await onSetMvp(isMvp ? null : playerResult.id);
+    } finally {
+      setSavingMvp(false);
+    }
+  }
 
   useEffect(() => {
     setKills(String(playerResult.kills));
@@ -891,6 +976,15 @@ function PlayerResultRow({
 
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted/40 px-2.5 py-2 text-sm">
+      <button
+        type="button"
+        onClick={toggleMvp}
+        disabled={savingMvp || !playerResult.playerId}
+        title={playerResult.playerId ? (isMvp ? "Retirer le MVP" : "Désigner comme MVP du match") : "Joueur non identifié"}
+        className={`shrink-0 rounded p-1 ${isMvp ? "text-yellow-500" : "text-muted-foreground hover:text-yellow-500"} disabled:cursor-not-allowed disabled:opacity-40`}
+      >
+        {savingMvp ? <Loader2 className="size-4 animate-spin" /> : <Crown className={`size-4 ${isMvp ? "fill-current" : ""}`} />}
+      </button>
       <span className="min-w-32 truncate text-muted-foreground" title={playerResult.detectedName}>
         {playerResult.detectedName}
       </span>
