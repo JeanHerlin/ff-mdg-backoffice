@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { CheckCircle2, Crown, Dices, KeyRound, Loader2, Plus, Trophy, Users } from "lucide-react";
+import { CheckCircle2, Crown, Dices, KeyRound, Loader2, Lock, Plus, Trash2, Trophy, Users } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Sheet } from "@/components/ui/sheet";
+import { DateTimePicker } from "@/components/ui/datetime-picker";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TabList, TabButton } from "@/components/ui/tabs";
 import { apiRequest, ApiError } from "@/lib/api-client";
@@ -34,6 +35,7 @@ interface GroupTeam {
 interface Group {
   id: string;
   name: string;
+  scheduledAt: string | null;
   roomId: string | null;
   roomPassword: string | null;
   teams: GroupTeam[];
@@ -99,6 +101,14 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+// Format attendu par DateTimePicker ("YYYY-MM-DDTHH:mm") — pour préremplir
+// l'éditeur de format à partir des groupes déjà enregistrés.
+function toDateTimeLocal(iso: string) {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function Logo({ url, label }: { url: string | null; label: string }) {
   if (url) {
     // eslint-disable-next-line @next/next/no-img-element -- image dynamique servie par Cloudinary
@@ -118,7 +128,6 @@ export function TournamentDetail() {
   const [tournament, setTournament] = useState<Tournament | null | undefined>(undefined);
   const [activeStageId, setActiveStageId] = useState<string | null>(null);
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
-  const [createStageOpen, setCreateStageOpen] = useState(false);
   const [championOpen, setChampionOpen] = useState(false);
 
   const load = useCallback(() => {
@@ -152,9 +161,10 @@ export function TournamentDetail() {
   }
 
   const lastStage = tournament.stages.at(-1) ?? null;
-  const canCreateStage = !lastStage
-    ? new Date() >= new Date(tournament.registrationClosesAt)
-    : lastStage.phase === "COMPLETED";
+  // Le format (étapes + groupes + dates) n'est modifiable que tant que les
+  // inscriptions ne sont pas encore ouvertes — une équipe qui s'inscrit doit
+  // voir un format qui ne bougera plus ensuite (voir tournaments.service).
+  const formatEditable = tournament.phase === "UPCOMING";
   const activeStage = tournament.stages.find((s) => s.id === activeStageId) ?? null;
 
   return (
@@ -211,18 +221,12 @@ export function TournamentDetail() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="gap-3">
-          <div className="flex flex-row items-center justify-between">
+      <FormatCard tournamentId={tournamentId} stages={tournament.stages} editable={formatEditable} onSaved={load} />
+
+      {tournament.stages.length > 0 && (
+        <Card>
+          <CardHeader className="gap-3">
             <CardTitle>Étapes</CardTitle>
-            {canCreateStage && (
-              <Button size="sm" onClick={() => setCreateStageOpen(true)}>
-                <Plus className="size-4" />
-                Créer l&apos;étape suivante
-              </Button>
-            )}
-          </div>
-          {tournament.stages.length > 0 && (
             <TabList>
               {tournament.stages.map((stage) => (
                 <TabButton key={stage.id} active={activeStageId === stage.id} onClick={() => setActiveStageId(stage.id)}>
@@ -230,33 +234,14 @@ export function TournamentDetail() {
                 </TabButton>
               ))}
             </TabList>
-          )}
-        </CardHeader>
-        <CardContent>
-          {tournament.stages.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Aucune étape pour le moment — créez la première une fois les inscriptions closes.
-            </p>
-          ) : activeStage ? (
-            <StageDetail
-              stage={activeStage}
-              activeGroupId={activeGroupId}
-              onSelectGroup={setActiveGroupId}
-              onStageChanged={load}
-            />
-          ) : null}
-        </CardContent>
-      </Card>
-
-      <Sheet open={createStageOpen} onClose={() => setCreateStageOpen(false)} title="Créer l'étape suivante">
-        <CreateStageForm
-          tournamentId={tournamentId}
-          onCreated={() => {
-            setCreateStageOpen(false);
-            load();
-          }}
-        />
-      </Sheet>
+          </CardHeader>
+          <CardContent>
+            {activeStage && (
+              <StageDetail stage={activeStage} activeGroupId={activeGroupId} onSelectGroup={setActiveGroupId} onStageChanged={load} />
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Sheet open={championOpen} onClose={() => setChampionOpen(false)} title="Désigner le champion">
         <SetChampionForm
@@ -273,30 +258,138 @@ export function TournamentDetail() {
   );
 }
 
-function CreateStageForm({ tournamentId, onCreated }: { tournamentId: string; onCreated: () => void }) {
-  const [name, setName] = useState("");
-  const [isFinal, setIsFinal] = useState(false);
-  const [qualifiersPerGroup, setQualifiersPerGroup] = useState("2");
+// --- Format du tournoi (étapes + groupes + dates), défini en une fois ----
+
+interface DraftGroup {
+  key: string;
+  name: string;
+  scheduledAt: string; // format DateTimePicker ("YYYY-MM-DDTHH:mm")
+}
+
+interface DraftStage {
+  key: string;
+  name: string;
+  isFinal: boolean;
+  qualifiersPerGroup: string;
+  groups: DraftGroup[];
+}
+
+let draftKeySeq = 0;
+function nextDraftKey() {
+  draftKeySeq += 1;
+  return `d${draftKeySeq}`;
+}
+
+function suggestedGroupName(index: number) {
+  return index < 26 ? `Groupe ${String.fromCharCode(65 + index)}` : `Groupe ${index + 1}`;
+}
+
+function draftFromStages(stages: Stage[]): DraftStage[] {
+  return stages.map((s) => ({
+    key: nextDraftKey(),
+    name: s.name,
+    isFinal: s.qualifiersPerGroup === null,
+    qualifiersPerGroup: String(s.qualifiersPerGroup ?? 2),
+    groups: s.groups.map((g) => ({ key: nextDraftKey(), name: g.name, scheduledAt: g.scheduledAt ? toDateTimeLocal(g.scheduledAt) : "" })),
+  }));
+}
+
+function emptyStage(index: number): DraftStage {
+  return {
+    key: nextDraftKey(),
+    name: index === 0 ? "Phase de groupes" : "",
+    isFinal: false,
+    qualifiersPerGroup: "2",
+    groups: [{ key: nextDraftKey(), name: suggestedGroupName(0), scheduledAt: "" }],
+  };
+}
+
+function FormatCard({
+  tournamentId,
+  stages,
+  editable,
+  onSaved,
+}: {
+  tournamentId: string;
+  stages: Stage[];
+  editable: boolean;
+  onSaved: () => void;
+}) {
+  const [draft, setDraft] = useState<DraftStage[]>(() => (stages.length > 0 ? draftFromStages(stages) : [emptyStage(0)]));
+  const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  // Ne resynchronise depuis le serveur que si l'admin n'a pas commencé à
+  // éditer localement — évite d'écraser une saisie en cours au prochain refetch.
+  useEffect(() => {
+    if (dirty) return;
+    setDraft(stages.length > 0 ? draftFromStages(stages) : [emptyStage(0)]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ne resynchronise que depuis le serveur, pas à chaque frappe locale
+  }, [stages]);
+
+  function markDirty() {
+    if (!dirty) setDirty(true);
+  }
+
+  function addStage() {
+    setDraft((prev) => [...prev, emptyStage(prev.length)]);
+    markDirty();
+  }
+  function removeStage(key: string) {
+    setDraft((prev) => prev.filter((s) => s.key !== key));
+    markDirty();
+  }
+  function updateStage(key: string, patch: Partial<DraftStage>) {
+    setDraft((prev) => prev.map((s) => (s.key === key ? { ...s, ...patch } : s)));
+    markDirty();
+  }
+  function addGroup(stageKey: string) {
+    setDraft((prev) =>
+      prev.map((s) =>
+        s.key === stageKey ? { ...s, groups: [...s.groups, { key: nextDraftKey(), name: suggestedGroupName(s.groups.length), scheduledAt: "" }] } : s
+      )
+    );
+    markDirty();
+  }
+  function removeGroup(stageKey: string, groupKey: string) {
+    setDraft((prev) => prev.map((s) => (s.key === stageKey ? { ...s, groups: s.groups.filter((g) => g.key !== groupKey) } : s)));
+    markDirty();
+  }
+  function updateGroup(stageKey: string, groupKey: string, patch: Partial<DraftGroup>) {
+    setDraft((prev) =>
+      prev.map((s) => (s.key === stageKey ? { ...s, groups: s.groups.map((g) => (g.key === groupKey ? { ...g, ...patch } : g)) } : s))
+    );
+    markDirty();
+  }
+
+  async function handleSave() {
     setError(null);
+    for (const s of draft) {
+      if (!s.name.trim() || s.groups.length === 0 || s.groups.some((g) => !g.name.trim() || !g.scheduledAt)) {
+        setError("Chaque étape a besoin d'un nom, et chaque groupe d'un nom et d'une date.");
+        return;
+      }
+    }
     setSaving(true);
     try {
-      await apiRequest(`/tournaments/${tournamentId}/stages`, {
+      await apiRequest(`/tournaments/${tournamentId}/format`, {
         method: "POST",
-        body: { name: name.trim(), qualifiersPerGroup: isFinal ? null : Number(qualifiersPerGroup) },
+        body: {
+          stages: draft.map((s) => ({
+            name: s.name.trim(),
+            qualifiersPerGroup: s.isFinal ? null : Number(s.qualifiersPerGroup),
+            groups: s.groups.map((g) => ({ name: g.name.trim(), scheduledAt: new Date(g.scheduledAt).toISOString() })),
+          })),
+        },
       });
-      onCreated();
+      setDirty(false);
+      onSaved();
     } catch (err) {
       setError(
-        err instanceof ApiError && err.message === "tournaments.previous_stage_not_completed"
-          ? "L'étape précédente doit d'abord être clôturée."
-          : err instanceof ApiError && err.message === "tournaments.registration_not_closed"
-            ? "Les inscriptions ne sont pas encore closes."
-            : "Une erreur est survenue, réessayez."
+        err instanceof ApiError && err.message === "tournaments.format_locked"
+          ? "Les inscriptions sont déjà ouvertes — le format ne peut plus être modifié."
+          : "Une erreur est survenue, réessayez."
       );
     } finally {
       setSaving(false);
@@ -304,47 +397,134 @@ function CreateStageForm({ tournamentId, onCreated }: { tournamentId: string; on
   }
 
   return (
-    <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="stage-name">Nom de l&apos;étape</Label>
-        <Input id="stage-name" value={name} onChange={(e) => setName(e.target.value)} required minLength={3} maxLength={80} placeholder="Phase de groupes" />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-foreground">Type d&apos;étape</label>
-        <div className="flex gap-2">
-          <Button type="button" size="sm" variant={!isFinal ? "default" : "outline"} onClick={() => setIsFinal(false)}>
-            Avec qualification
-          </Button>
-          <Button type="button" size="sm" variant={isFinal ? "default" : "outline"} onClick={() => setIsFinal(true)}>
-            Étape finale
-          </Button>
-        </div>
-      </div>
-
-      {!isFinal && (
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="stage-qualifiers">Équipes qualifiées PAR groupe</Label>
-          <Input
-            id="stage-qualifiers"
-            type="number"
-            min={1}
-            value={qualifiersPerGroup}
-            onChange={(e) => setQualifiersPerGroup(e.target.value)}
-          />
-          <p className="text-xs text-muted-foreground">
-            À la clôture de cette étape, ce nombre d&apos;équipes de CHAQUE groupe avancera vers l&apos;étape suivante.
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Format du tournoi</CardTitle>
+        {!editable && (
+          <Badge variant="outline" className="gap-1">
+            <Lock className="size-3" />
+            Verrouillé — inscriptions ouvertes
+          </Badge>
+        )}
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {!editable && stages.length === 0 ? (
+          <p className="text-sm text-accent">
+            Les inscriptions sont ouvertes mais aucun format n&apos;a été défini — cela n&apos;aurait pas dû arriver ; contactez
+            un développeur.
           </p>
-        </div>
-      )}
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Le parcours complet (étapes, groupes, dates) est visible par les équipes avant qu&apos;elles ne s&apos;inscrivent —
+            modifiable uniquement tant que les inscriptions ne sont pas encore ouvertes. Le tirage au sort des équipes dans ces
+            groupes reste après la clôture des inscriptions.
+          </p>
+        )}
 
-      {error && <p className="text-sm text-accent">{error}</p>}
+        {draft.map((stage, stageIndex) => (
+          <div key={stage.key} className="flex flex-col gap-3 rounded-lg border border-border p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Étape {stageIndex + 1}</span>
+              {editable && draft.length > 1 && (
+                <Button type="button" size="icon" variant="outline" onClick={() => removeStage(stage.key)}>
+                  <Trash2 className="size-4" />
+                </Button>
+              )}
+            </div>
 
-      <Button type="submit" disabled={saving}>
-        {saving && <Loader2 className="size-4 animate-spin" />}
-        Créer l&apos;étape
-      </Button>
-    </form>
+            {editable ? (
+              <Input
+                value={stage.name}
+                onChange={(e) => updateStage(stage.key, { name: e.target.value })}
+                placeholder="Nom de l'étape (ex. Phase de groupes)"
+              />
+            ) : (
+              <p className="font-medium text-foreground">{stage.name}</p>
+            )}
+
+            {editable ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" size="sm" variant={!stage.isFinal ? "default" : "outline"} onClick={() => updateStage(stage.key, { isFinal: false })}>
+                  Avec qualification
+                </Button>
+                <Button type="button" size="sm" variant={stage.isFinal ? "default" : "outline"} onClick={() => updateStage(stage.key, { isFinal: true })}>
+                  Étape finale
+                </Button>
+                {!stage.isFinal && (
+                  <>
+                    <span className="text-xs text-muted-foreground">Qualifiés par groupe :</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={stage.qualifiersPerGroup}
+                      onChange={(e) => updateStage(stage.key, { qualifiersPerGroup: e.target.value })}
+                      className="w-20"
+                    />
+                  </>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {stage.isFinal ? "Étape finale — pas de qualification." : `${stage.qualifiersPerGroup} équipe(s) qualifiée(s) par groupe.`}
+              </p>
+            )}
+
+            <div className="flex flex-col gap-2 pl-3">
+              {stage.groups.map((group) => (
+                <div key={group.key} className="flex flex-wrap items-center gap-2">
+                  {editable ? (
+                    <>
+                      <Input
+                        value={group.name}
+                        onChange={(e) => updateGroup(stage.key, group.key, { name: e.target.value })}
+                        className="w-36"
+                        placeholder="Nom du groupe"
+                      />
+                      <DateTimePicker
+                        value={group.scheduledAt}
+                        onChange={(v) => updateGroup(stage.key, group.key, { scheduledAt: v })}
+                        className="w-56"
+                      />
+                      {stage.groups.length > 1 && (
+                        <Button type="button" size="icon" variant="outline" onClick={() => removeGroup(stage.key, group.key)}>
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">
+                      {group.name} — {group.scheduledAt ? formatDate(new Date(group.scheduledAt).toISOString()) : "date non définie"}
+                    </span>
+                  )}
+                </div>
+              ))}
+              {editable && (
+                <Button type="button" size="sm" variant="outline" className="w-fit" onClick={() => addGroup(stage.key)}>
+                  <Plus className="size-3.5" />
+                  Ajouter un groupe
+                </Button>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {editable && (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Button type="button" variant="outline" onClick={addStage}>
+              <Plus className="size-4" />
+              Ajouter une étape
+            </Button>
+            <div className="flex items-center gap-2">
+              {error && <span className="text-sm text-accent">{error}</span>}
+              <Button type="button" onClick={handleSave} disabled={saving}>
+                {saving && <Loader2 className="size-4 animate-spin" />}
+                Enregistrer le format
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -423,9 +603,29 @@ function StageDetail({
   onStageChanged: () => void;
 }) {
   const [drawOpen, setDrawOpen] = useState(false);
+  const [drawing, setDrawing] = useState(false);
+  const [drawError, setDrawError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
+
+  async function draw() {
+    setDrawing(true);
+    setDrawError(null);
+    try {
+      await apiRequest(`/tournaments/stages/${stage.id}/draw`, { method: "POST" });
+      setDrawOpen(false);
+      onStageChanged();
+    } catch (err) {
+      setDrawError(
+        err instanceof ApiError && err.message === "tournaments.not_enough_teams"
+          ? "Pas assez d'équipes inscrites/qualifiées pour remplir tous les groupes de cette étape."
+          : "Une erreur est survenue, réessayez."
+      );
+    } finally {
+      setDrawing(false);
+    }
+  }
 
   async function startStage() {
     setStarting(true);
@@ -481,7 +681,10 @@ function StageDetail({
       </div>
 
       {stage.groups.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Pas encore de groupes — lancez le tirage au sort.</p>
+        <p className="text-sm text-accent">
+          Aucun groupe défini pour cette étape — cela n&apos;aurait pas dû arriver (le format doit toujours poser les groupes en
+          amont), contactez un développeur.
+        </p>
       ) : (
         <>
           <TabList className="border-b-0">
@@ -502,15 +705,20 @@ function StageDetail({
         </>
       )}
 
-      <Sheet open={drawOpen} onClose={() => setDrawOpen(false)} title="Tirage au sort des groupes">
-        <DrawGroupsForm
-          stageId={stage.id}
-          onDrawn={() => {
-            setDrawOpen(false);
-            onStageChanged();
-          }}
-        />
-      </Sheet>
+      <ConfirmDialog
+        open={drawOpen}
+        onOpenChange={(open) => {
+          setDrawOpen(open);
+          if (!open) setDrawError(null);
+        }}
+        title="Lancer le tirage au sort ?"
+        description={`Les équipes ${stage.order === 1 ? "inscrites au tournoi" : "qualifiées de l'étape précédente"} seront réparties aléatoirement dans les ${stage.groups.length} groupe(s) déjà définis dans le format (${stage.groups.map((g) => g.name).join(", ")}).`}
+        confirmLabel="Tirer au sort"
+        loading={drawing}
+        onConfirm={draw}
+      >
+        {drawError && <p className="text-sm text-accent">{drawError}</p>}
+      </ConfirmDialog>
 
       <ConfirmDialog
         open={completeOpen}
@@ -529,48 +737,6 @@ function StageDetail({
   );
 }
 
-function DrawGroupsForm({ stageId, onDrawn }: { stageId: string; onDrawn: () => void }) {
-  const [numberOfGroups, setNumberOfGroups] = useState("2");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setSaving(true);
-    try {
-      await apiRequest(`/tournaments/stages/${stageId}/draw`, { method: "POST", body: { numberOfGroups: Number(numberOfGroups) } });
-      onDrawn();
-    } catch (err) {
-      setError(
-        err instanceof ApiError && err.message === "tournaments.not_enough_teams"
-          ? "Pas assez d'équipes qualifiées pour ce nombre de groupes."
-          : "Une erreur est survenue, réessayez."
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="draw-groups">Nombre de groupes</Label>
-        <Input id="draw-groups" type="number" min={1} max={32} value={numberOfGroups} onChange={(e) => setNumberOfGroups(e.target.value)} />
-        <p className="text-xs text-muted-foreground">
-          Les équipes qualifiées pour cette étape sont réparties aléatoirement de façon équilibrée — corrigeable ensuite équipe
-          par équipe.
-        </p>
-      </div>
-      {error && <p className="text-sm text-accent">{error}</p>}
-      <Button type="submit" disabled={saving}>
-        {saving && <Loader2 className="size-4 animate-spin" />}
-        Tirer au sort
-      </Button>
-    </form>
-  );
-}
-
 function GroupTeamsCard({ group, allGroups, onChanged }: { group: Group; allGroups: Group[]; onChanged: () => void }) {
   return (
     <Card>
@@ -579,6 +745,7 @@ function GroupTeamsCard({ group, allGroups, onChanged }: { group: Group; allGrou
           <Users className="size-4" />
           Équipes du {group.name.toLowerCase()} ({group.teams.length})
         </CardTitle>
+        {group.scheduledAt && <p className="text-xs text-muted-foreground">Programmé : {formatDate(group.scheduledAt)}</p>}
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
         {group.teams.map((gt) => (
