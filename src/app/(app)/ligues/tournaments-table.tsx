@@ -187,7 +187,9 @@ function CreateTournamentForm({ onCreated }: { onCreated: () => void }) {
       setError(
         err instanceof ApiError && err.message === "tournaments.dates_invalid"
           ? "La clôture des inscriptions doit être après l'ouverture, et au plus tard au coup d'envoi."
-          : "Une erreur est survenue, réessayez."
+          : err instanceof ApiError && err.message === "auth.forbidden"
+            ? "Votre compte n'a pas la permission \"Ligues & tournois\" — demandez à un super-admin de vous l'accorder dans Administrateurs."
+            : `Une erreur est survenue, réessayez.${err instanceof ApiError ? ` (${err.message})` : ""}`
       );
     } finally {
       setSaving(false);
