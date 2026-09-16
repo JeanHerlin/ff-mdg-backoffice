@@ -161,10 +161,11 @@ export function TournamentDetail() {
   }
 
   const lastStage = tournament.stages.at(-1) ?? null;
-  // Le format (étapes + groupes + dates) n'est modifiable que tant que les
-  // inscriptions ne sont pas encore ouvertes — une équipe qui s'inscrit doit
-  // voir un format qui ne bougera plus ensuite (voir tournaments.service).
-  const formatEditable = tournament.phase === "UPCOMING";
+  // Le format (étapes + groupes + dates) n'est modifiable que tant qu'AUCUNE
+  // équipe ne s'est encore inscrite — pas seulement tant que les inscriptions
+  // ne sont pas ouvertes : une fenêtre d'inscription ouverte sans aucune
+  // inscription n'a encore rien promis à personne (voir tournaments.service).
+  const formatEditable = tournament.registrations.length === 0;
   const activeStage = tournament.stages.find((s) => s.id === activeStageId) ?? null;
 
   return (
@@ -388,7 +389,7 @@ function FormatCard({
     } catch (err) {
       setError(
         err instanceof ApiError && err.message === "tournaments.format_locked"
-          ? "Les inscriptions sont déjà ouvertes — le format ne peut plus être modifié."
+          ? "Au moins une équipe est déjà inscrite — le format ne peut plus être modifié."
           : "Une erreur est survenue, réessayez."
       );
     } finally {
@@ -403,15 +404,15 @@ function FormatCard({
         {!editable && (
           <Badge variant="outline" className="gap-1">
             <Lock className="size-3" />
-            Verrouillé — inscriptions ouvertes
+            Verrouillé — des équipes sont déjà inscrites
           </Badge>
         )}
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {!editable && stages.length === 0 ? (
           <p className="text-sm text-accent">
-            Les inscriptions sont ouvertes mais aucun format n&apos;a été défini — cela n&apos;aurait pas dû arriver ; contactez
-            un développeur.
+            Des équipes sont inscrites mais aucun format n&apos;a été défini — cela n&apos;aurait pas dû arriver (l&apos;inscription
+            est censée être bloquée sans format) ; contactez un développeur.
           </p>
         ) : (
           <p className="text-xs text-muted-foreground">
