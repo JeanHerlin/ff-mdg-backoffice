@@ -4,11 +4,19 @@ import { useEffect, useState } from "react";
 import { Search, ChevronLeft, ChevronRight, Crown, Hash, Loader2, TriangleAlert } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { Sheet } from "@/components/ui/sheet";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { apiRequestWithMeta, apiRequest } from "@/lib/api-client";
+
+interface Division {
+  id: string;
+  name: string;
+  badgeColor: string;
+}
 
 interface TeamSummary {
   id: string;
@@ -20,6 +28,7 @@ interface TeamSummary {
   memberCount: number;
   createdAt: string;
   dissolutionRequestedAt: string | null;
+  division?: Division | null;
 }
 
 interface TeamMember {
@@ -56,6 +65,25 @@ export function TeamsTable() {
   const [selected, setSelected] = useState<TeamDetail | null>(null);
   const [confirmAction, setConfirmAction] = useState<DissolutionAction | null>(null);
   const [resolving, setResolving] = useState(false);
+  const [divisions, setDivisions] = useState<Division[]>([]);
+  const [savingDivision, setSavingDivision] = useState(false);
+
+  useEffect(() => {
+    apiRequest<Division[]>("/divisions?scope=TEAM").then((data) => setDivisions(data ?? []));
+  }, []);
+
+  async function changeDivision(divisionId: string) {
+    if (!selectedId) return;
+    setSavingDivision(true);
+    try {
+      await apiRequest(`/divisions/teams/${selectedId}`, { method: "PATCH", body: { divisionId: divisionId || null } });
+      const division = divisions.find((d) => d.id === divisionId) ?? null;
+      setSelected((prev) => (prev ? { ...prev, division } : prev));
+      setItems((prev) => prev.map((t) => (t.id === selectedId ? { ...t, division } : t)));
+    } finally {
+      setSavingDivision(false);
+    }
+  }
 
   function reload() {
     setLoading(true);
@@ -225,6 +253,31 @@ export function TeamsTable() {
             <Badge variant={selected.status === "CERTIFIED" ? "default" : "muted"} className="w-fit">
               {selected.status === "CERTIFIED" ? "Certifiée" : "En attente de vérification"}
             </Badge>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="team-division">Division</Label>
+              <div className="flex items-center gap-2">
+                {selected.division && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold"
+                    style={{ backgroundColor: `${selected.division.badgeColor}26`, color: selected.division.badgeColor, borderColor: `${selected.division.badgeColor}4d` }}
+                  >
+                    {selected.division.name}
+                  </span>
+                )}
+                <Select
+                  id="team-division"
+                  value={selected.division?.id ?? ""}
+                  onChange={changeDivision}
+                  options={[{ value: "", label: "Non classée" }, ...divisions.map((d) => ({ value: d.id, label: d.name }))]}
+                  disabled={savingDivision}
+                  className="flex-1"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Recalculée automatiquement à chaque clôture de saison — modifiable ici à tout moment.
+              </p>
+            </div>
 
             {selected.dissolutionRequestedAt && (
               <div className="flex flex-col gap-2 rounded-lg border border-accent/30 bg-accent/5 p-3">

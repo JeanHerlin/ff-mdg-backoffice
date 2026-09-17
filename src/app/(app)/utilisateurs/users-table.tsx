@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Search, ChevronLeft, ChevronRight, ListFilter, Loader2, Medal, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -32,6 +33,12 @@ interface PlayerStats {
   performanceIndex: number;
 }
 
+interface Division {
+  id: string;
+  name: string;
+  badgeColor: string;
+}
+
 interface PlayerUser {
   id: string;
   email: string;
@@ -42,6 +49,7 @@ interface PlayerUser {
   createdAt: string;
   playerProfile: PlayerProfile | null;
   stats?: PlayerStats;
+  division?: Division | null;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -122,6 +130,26 @@ export function UsersTable() {
   const [minWins, setMinWins] = useState("");
   const [minKd, setMinKd] = useState("");
   const [minPerformanceIndex, setMinPerformanceIndex] = useState("");
+
+  const [divisions, setDivisions] = useState<Division[]>([]);
+  const [savingDivision, setSavingDivision] = useState(false);
+
+  useEffect(() => {
+    apiRequest<Division[]>("/divisions?scope=PLAYER").then((data) => setDivisions(data ?? []));
+  }, []);
+
+  async function changeDivision(divisionId: string) {
+    if (!selected) return;
+    setSavingDivision(true);
+    try {
+      await apiRequest(`/divisions/players/${selected.id}`, { method: "PATCH", body: { divisionId: divisionId || null } });
+      const division = divisions.find((d) => d.id === divisionId) ?? null;
+      setSelected((prev) => (prev ? { ...prev, division } : prev));
+      setItems((prev) => prev.map((u) => (u.id === selected.id ? { ...u, division } : u)));
+    } finally {
+      setSavingDivision(false);
+    }
+  }
 
   const endpoint = tab === "verified" ? "/users" : "/users/unverified";
 
@@ -446,6 +474,31 @@ export function UsersTable() {
                 </dl>
               </div>
             )}
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="player-division">Division</Label>
+              <div className="flex items-center gap-2">
+                {selected.division && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold"
+                    style={{ backgroundColor: `${selected.division.badgeColor}26`, color: selected.division.badgeColor, borderColor: `${selected.division.badgeColor}4d` }}
+                  >
+                    {selected.division.name}
+                  </span>
+                )}
+                <Select
+                  id="player-division"
+                  value={selected.division?.id ?? ""}
+                  onChange={changeDivision}
+                  options={[{ value: "", label: "Non classé" }, ...divisions.map((d) => ({ value: d.id, label: d.name }))]}
+                  disabled={savingDivision}
+                  className="flex-1"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Recalculée automatiquement à chaque clôture de saison — modifiable ici à tout moment.
+              </p>
+            </div>
 
             <Button
               variant={selected.isActive ? "accent" : "default"}
