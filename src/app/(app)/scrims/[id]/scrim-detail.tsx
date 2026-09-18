@@ -31,6 +31,12 @@ interface ScrimDetailData {
   phase: Phase;
   registrationOpen: boolean;
   checkinOpen: boolean;
+  requiredDivision: { id: string; name: string; badgeColor: string } | null;
+}
+
+interface Division {
+  id: string;
+  name: string;
 }
 
 interface Room {
@@ -445,6 +451,18 @@ export function ScrimDetail() {
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-bold text-foreground">{scrim.name}</h1>
             <Badge variant={PHASE_VARIANT[scrim.phase]}>{PHASE_LABEL[scrim.phase]}</Badge>
+            {scrim.requiredDivision && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold"
+                style={{
+                  backgroundColor: `${scrim.requiredDivision.badgeColor}26`,
+                  color: scrim.requiredDivision.badgeColor,
+                  borderColor: `${scrim.requiredDivision.badgeColor}4d`,
+                }}
+              >
+                Réservé — {scrim.requiredDivision.name}
+              </span>
+            )}
           </div>
           {scrim.description && <p className="mt-1 max-w-xl text-sm text-muted-foreground">{scrim.description}</p>}
           {(registrationOpenNow || checkinOpenNow) && (
@@ -676,8 +694,14 @@ function EditScrimForm({
   const [startAt, setStartAt] = useState(toDatetimeLocalValue(scrim.startAt));
   const [teamsPerLobby, setTeamsPerLobby] = useState(String(scrim.teamsPerLobby));
   const [lobbyMax, setLobbyMax] = useState(String(scrim.lobbyMax));
+  const [requiredDivisionId, setRequiredDivisionId] = useState(scrim.requiredDivision?.id ?? "");
+  const [divisions, setDivisions] = useState<Division[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    apiRequest<Division[]>("/divisions?scope=TEAM").then((data) => setDivisions(data ?? []));
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -704,6 +728,7 @@ function EditScrimForm({
           teamsPerLobby: Number(teamsPerLobby),
           lobbyMax: Number(lobbyMax),
           lobbyMode: "FIRST_COME",
+          requiredDivisionId: requiredDivisionId || null,
         },
       });
       onSaved();
@@ -772,6 +797,16 @@ function EditScrimForm({
               <Label htmlFor="edit-lobby-max">Nombre de lobby max</Label>
               <Input id="edit-lobby-max" type="number" min={1} max={50} value={lobbyMax} onChange={(e) => setLobbyMax(e.target.value)} required />
             </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-scrim-division">Division requise (facultatif)</Label>
+            <Select
+              id="edit-scrim-division"
+              value={requiredDivisionId}
+              onChange={setRequiredDivisionId}
+              options={[{ value: "", label: "Ouvert à toutes les équipes certifiées" }, ...divisions.map((d) => ({ value: d.id, label: d.name }))]}
+            />
           </div>
 
           {error && <p className="text-sm text-accent">{error}</p>}

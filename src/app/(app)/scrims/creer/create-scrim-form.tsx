@@ -1,17 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { DateTimePicker } from "@/components/ui/datetime-picker";
 import { apiRequest, ApiError } from "@/lib/api-client";
 
 interface ScrimDetail {
   id: string;
+}
+
+interface Division {
+  id: string;
+  name: string;
 }
 
 export function CreateScrimForm() {
@@ -26,8 +32,14 @@ export function CreateScrimForm() {
   const [startAt, setStartAt] = useState("");
   const [teamsPerLobby, setTeamsPerLobby] = useState("12");
   const [lobbyMax, setLobbyMax] = useState("2");
+  const [requiredDivisionId, setRequiredDivisionId] = useState("");
+  const [divisions, setDivisions] = useState<Division[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    apiRequest<Division[]>("/divisions?scope=TEAM").then((data) => setDivisions(data ?? []));
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -54,6 +66,7 @@ export function CreateScrimForm() {
           teamsPerLobby: Number(teamsPerLobby),
           lobbyMax: Number(lobbyMax),
           lobbyMode: "FIRST_COME",
+          requiredDivisionId: requiredDivisionId || null,
         },
       });
       if (data?.scrim) router.push(`/scrims/${data.scrim.id}`);
@@ -151,6 +164,19 @@ export function CreateScrimForm() {
                 required
               />
             </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="scrim-division">Division requise (facultatif)</Label>
+            <Select
+              id="scrim-division"
+              value={requiredDivisionId}
+              onChange={setRequiredDivisionId}
+              options={[{ value: "", label: "Ouvert à toutes les équipes certifiées" }, ...divisions.map((d) => ({ value: d.id, label: d.name }))]}
+            />
+            <p className="text-xs text-muted-foreground">
+              Si posé, seules les équipes actuellement classées dans cette division précise pourront s&apos;inscrire.
+            </p>
           </div>
 
           <div className="flex flex-col gap-2">

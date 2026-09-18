@@ -1,13 +1,17 @@
-import { ComingSoon } from "@/components/coming-soon";
+import { AnnouncementsTable } from "./announcements-table";
 
 export const metadata = { title: "Annonces" };
 
 export default function AnnouncementsPage() {
   return (
-    <ComingSoon
-      module="Module 11 — Fil d'actualité"
-      title="Annonces officielles"
-      description="Publiez les annonces officielles affichées chronologiquement sur le fil d'actualité."
-    />
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Fil d&apos;actualité</h1>
+        <p className="text-sm text-muted-foreground">
+          Publiez les annonces officielles affichées chronologiquement sur le fil d&apos;actualité, aux côtés du mercato.
+        </p>
+      </div>
+      <AnnouncementsTable />
+    </div>
   );
 }

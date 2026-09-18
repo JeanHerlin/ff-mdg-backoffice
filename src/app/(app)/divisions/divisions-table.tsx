@@ -209,7 +209,7 @@ function DivisionForm({ scope, division, onSaved }: { scope: Scope; division: Di
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="division-min-points">Seuil de points (saison)</Label>
-        <Input id="division-min-points" type="number" min={0} value={minPoints} onChange={(e) => setMinPoints(e.target.value)} />
+        <Input id="division-min-points" type="number" value={minPoints} onChange={(e) => setMinPoints(e.target.value)} />
         <p className="text-xs text-muted-foreground">
           {scope === "TEAM" ? "Une équipe" : "Un joueur"} ayant cumulé au moins ce nombre de points sur la saison clôturée est
           classé dans ce palier (le seuil le plus haut atteint l&apos;emporte).
