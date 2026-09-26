@@ -31,6 +31,7 @@ interface OfflineTeamOption {
   id: string;
   name: string;
   tag: string | null;
+  logoUrl: string | null;
 }
 
 interface PlayerResult {
@@ -71,6 +72,7 @@ interface StandingEntry {
   teamId: string;
   name: string;
   tag: string | null;
+  logoUrl: string | null;
   totalPoints: number;
   totalPlacementPoints: number;
   totalKillPoints: number;
@@ -79,7 +81,11 @@ interface StandingEntry {
   booyahCount: number;
 }
 
-function TeamBadge({ label }: { label: string }) {
+function TeamBadge({ url, label }: { url: string | null; label: string }) {
+  if (url) {
+    // eslint-disable-next-line @next/next/no-img-element -- image dynamique servie par Cloudinary
+    return <img src={url} alt={label} className="size-7 rounded-md object-cover" />;
+  }
   return (
     <div className="flex size-7 items-center justify-center rounded-md bg-primary/15 text-[10px] font-bold text-primary">
       {label.slice(0, 2).toUpperCase()}
@@ -112,7 +118,7 @@ function GlobalStandingsTable({ standings }: { standings: StandingEntry[] }) {
               <td className="py-2 pr-3 text-muted-foreground">{idx + 1}</td>
               <td className="py-2 pr-3">
                 <div className="flex items-center gap-2">
-                  <TeamBadge label={entry.tag ?? entry.name} />
+                  <TeamBadge url={entry.logoUrl} label={entry.tag ?? entry.name} />
                   <span className="font-medium text-foreground">
                     {entry.name} {entry.tag && <span className="text-muted-foreground">[{entry.tag}]</span>}
                   </span>
@@ -653,6 +659,9 @@ function TeamResultRow({
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline">#{teamResult.placement}</Badge>
+          {teamResult.offlineScrimTeam && (
+            <TeamBadge url={teamResult.offlineScrimTeam.logoUrl} label={teamResult.offlineScrimTeam.tag ?? teamResult.offlineScrimTeam.name} />
+          )}
           <Select
             value={teamResult.offlineScrimTeamId ?? ""}
             onChange={assignTeam}

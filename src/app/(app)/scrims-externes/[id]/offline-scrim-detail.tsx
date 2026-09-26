@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { ImagePlus, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ interface OfflineScrimTeam {
   id: string;
   name: string;
   tag: string | null;
+  logoUrl: string | null;
 }
 
 interface OfflineScrimData {
@@ -25,6 +26,18 @@ interface OfflineScrimData {
   startAt: string;
   teams: OfflineScrimTeam[];
   _count: { matches: number };
+}
+
+function TeamLogo({ url, label }: { url: string | null; label: string }) {
+  if (url) {
+    // eslint-disable-next-line @next/next/no-img-element -- image dynamique servie par Cloudinary
+    return <img src={url} alt={label} className="size-5 rounded-full object-cover" />;
+  }
+  return (
+    <div className="flex size-5 items-center justify-center rounded-full bg-primary/15 text-[9px] font-bold text-primary">
+      {label.slice(0, 2).toUpperCase()}
+    </div>
+  );
 }
 
 function formatDate(iso: string) {
@@ -130,8 +143,9 @@ export function OfflineScrimDetail() {
               {scrim.teams.map((team) => (
                 <span
                   key={team.id}
-                  className="flex items-center gap-2 rounded-full border border-border bg-muted/40 py-1 pl-3 pr-1.5 text-sm"
+                  className="flex items-center gap-2 rounded-full border border-border bg-muted/40 py-1 pl-2 pr-1.5 text-sm"
                 >
+                  <TeamLogo url={team.logoUrl} label={team.tag ?? team.name} />
                   <span className="font-medium text-foreground">{team.name}</span>
                   {team.tag && <span className="text-muted-foreground">[{team.tag}]</span>}
                   <button
@@ -255,19 +269,29 @@ function EditScrimForm({ scrim, onSaved }: { scrim: OfflineScrimData; onSaved: (
 function TeamForm({ scrimId, team, onSaved }: { scrimId: string; team: OfflineScrimTeam | null; onSaved: () => void }) {
   const [name, setName] = useState(team?.name ?? "");
   const [tag, setTag] = useState(team?.tag ?? "");
+  const [logo, setLogo] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(team?.logoUrl ?? null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function handleLogoChange(file: File | null) {
+    setLogo(file);
+    setLogoPreview(file ? URL.createObjectURL(file) : (team?.logoUrl ?? null));
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setSaving(true);
     try {
-      const body = { name: name.trim(), tag: tag.trim() || undefined };
+      const formData = new FormData();
+      formData.set("name", name.trim());
+      if (tag.trim()) formData.set("tag", tag.trim());
+      if (logo) formData.set("logo", logo);
       if (team) {
-        await apiRequest(`/offline-scrims/${scrimId}/teams/${team.id}`, { method: "PATCH", body });
+        await apiRequest(`/offline-scrims/${scrimId}/teams/${team.id}`, { method: "PATCH", body: formData });
       } else {
-        await apiRequest(`/offline-scrims/${scrimId}/teams`, { method: "POST", body });
+        await apiRequest(`/offline-scrims/${scrimId}/teams`, { method: "POST", body: formData });
       }
       onSaved();
     } catch (err) {
@@ -290,6 +314,34 @@ function TeamForm({ scrimId, team, onSaved }: { scrimId: string; team: OfflineSc
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="offline-team-tag">Tag (facultatif)</Label>
         <Input id="offline-team-tag" value={tag} onChange={(e) => setTag(e.target.value)} maxLength={10} />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="offline-team-logo">Logo (facultatif)</Label>
+        <div className="flex items-center gap-3">
+          {logoPreview ? (
+            // eslint-disable-next-line @next/next/no-img-element -- aperçu local ou logo Cloudinary déjà enregistré
+            <img src={logoPreview} alt="" className="size-12 rounded-full border border-border object-cover" />
+          ) : (
+            <div className="flex size-12 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
+              {(tag || name || "?").slice(0, 2).toUpperCase()}
+            </div>
+          )}
+          <label
+            htmlFor="offline-team-logo"
+            className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border bg-muted px-3 py-2 text-xs text-muted-foreground hover:border-primary hover:text-primary"
+          >
+            <ImagePlus className="size-4 shrink-0" />
+            {logoPreview ? "Changer le logo" : "Choisir un logo"}
+          </label>
+          <input
+            id="offline-team-logo"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(e) => handleLogoChange(e.target.files?.[0] ?? null)}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">Sans logo, les initiales du tag (ou du nom) sont affichées à la place.</p>
       </div>
       {error && <p className="text-sm text-accent">{error}</p>}
       <Button type="submit" disabled={saving}>

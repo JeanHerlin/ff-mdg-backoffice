@@ -8,18 +8,22 @@ import { Crosshair, Crown, Flag, Target } from "lucide-react";
 // bleu marine), indépendante du thème clair/sombre du backoffice.
 const ORANGE = "#F5821F";
 const NAVY = "#1B2438";
-const ROW_BG = "#141C2E";
+// Légèrement transparent — si la photo déborde sous le tableau (voir le
+// composant principal), elle reste devinable derrière sans jamais nuire à
+// la lisibilité du texte (blanc, fortement contrasté même à 90% d'opacité).
+const ROW_BG = "rgba(20,28,46,0.92)";
 const GOLD = "#F5C842";
 const AMBER = "#FDBA47";
 const GREEN = "#3ADC7A";
 const MUTED = "#9BA6BC";
 
 const WIDTH = 1600;
-const PHOTO_COLUMN_WIDTH = 300;
+const PHOTO_COLUMN_WIDTH = 260;
 
 export interface PosterStandingEntry {
   name: string;
   tag: string | null;
+  logoUrl: string | null;
   matchesPlayed: number;
   totalKills: number;
   totalPlacementPoints: number;
@@ -40,7 +44,11 @@ function initialsOf(label: string) {
   return label.trim().slice(0, 2).toUpperCase();
 }
 
-function TeamAvatar({ label }: { label: string }) {
+function TeamAvatar({ logoUrl, label }: { logoUrl: string | null; label: string }) {
+  if (logoUrl) {
+    // eslint-disable-next-line @next/next/no-img-element -- capturé hors DOM Next.js normal (html-to-image)
+    return <img src={logoUrl} alt="" style={{ width: 34, height: 34, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />;
+  }
   return (
     <div
       style={{
@@ -69,12 +77,13 @@ function HeaderCell({ icon, label, width }: { icon: React.ReactNode; label: stri
         width,
         display: "flex",
         alignItems: "center",
-        gap: 5,
+        gap: 4,
         color: NAVY,
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: 800,
         textTransform: "uppercase",
-        letterSpacing: 0.3,
+        letterSpacing: 0.2,
+        whiteSpace: "nowrap",
       }}
     >
       {icon}
@@ -84,13 +93,13 @@ function HeaderCell({ icon, label, width }: { icon: React.ReactNode; label: stri
 }
 
 function ResultTable({ entries, startRank }: { entries: PosterStandingEntry[]; startRank: number }) {
-  const RANK_W = 46;
-  const TEAM_W = 250;
-  const PLAYED_W = 76;
-  const KILLS_W = 70;
-  const PLACE_W = 90;
-  const BOOYAH_W = 90;
-  const TOTAL_W = 100;
+  const RANK_W = 44;
+  const TEAM_W = 244;
+  const PLAYED_W = 74;
+  const KILLS_W = 68;
+  const PLACE_W = 100;
+  const BOOYAH_W = 102;
+  const TOTAL_W = 106;
 
   return (
     <div style={{ flex: 1, borderRadius: 6, overflow: "hidden" }}>
@@ -105,7 +114,7 @@ function ResultTable({ entries, startRank }: { entries: PosterStandingEntry[]; s
           gap: 4,
         }}
       >
-        <div style={{ width: RANK_W, color: NAVY, fontSize: 12, fontWeight: 800 }}>#</div>
+        <div style={{ width: RANK_W, color: NAVY, fontSize: 11, fontWeight: 800 }}>#</div>
         <HeaderCell icon={null} label="Team" width={TEAM_W} />
         <HeaderCell icon={<Flag size={12} strokeWidth={3} />} label="Played" width={PLAYED_W} />
         <HeaderCell icon={<Crosshair size={12} strokeWidth={3} />} label="Kills" width={KILLS_W} />
@@ -149,7 +158,7 @@ function ResultTable({ entries, startRank }: { entries: PosterStandingEntry[]; s
               </span>
             </div>
             <div style={{ width: TEAM_W, display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
-              <TeamAvatar label={entry.tag ?? entry.name} />
+              <TeamAvatar logoUrl={entry.logoUrl} label={entry.tag ?? entry.name} />
               <span
                 style={{
                   color: "#fff",
@@ -277,8 +286,10 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
             position: "absolute",
             left: -10,
             bottom: 0,
-            width: PHOTO_COLUMN_WIDTH - 20,
-            height: height - 160,
+            // Déborde volontairement un peu sous le tableau de gauche (voir
+            // ROW_BG semi-transparent) plutôt que de laisser une bande vide.
+            width: PHOTO_COLUMN_WIDTH + 30,
+            height: height - 230,
             objectFit: "cover",
             objectPosition: "top",
             maskImage: "linear-gradient(to bottom, black 85%, transparent 100%)",
@@ -293,7 +304,7 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
           left: PHOTO_COLUMN_WIDTH,
           right: 40,
           display: "flex",
-          gap: 56,
+          gap: 40,
         }}
       >
         <ResultTable entries={left} startRank={1} />
