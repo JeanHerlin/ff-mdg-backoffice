@@ -552,19 +552,28 @@ function MatchCard({
       )}
 
       <div className="flex flex-col gap-2">
-        {match.teamResults.map((tr) => (
-          <TeamResultRow
-            key={tr.id}
-            matchId={match.id}
-            teamResult={tr}
-            teams={teams}
-            onPatchTeamResult={(patch) => onPatchTeamResult(tr.id, patch)}
-            onRemoveTeamResult={() => onRemoveTeamResult(tr.id)}
-            onPatchPlayerResult={(playerResultId, patch) => onPatchPlayerResult(tr.id, playerResultId, patch)}
-            onRemovePlayerResult={(playerResultId) => onRemovePlayerResult(tr.id, playerResultId)}
-            onResultsChanged={onResultsChanged}
-          />
-        ))}
+        {match.teamResults.map((tr) => {
+          // Une équipe déjà choisie sur une autre ligne de CE match disparaît
+          // du sélecteur — évite de la sélectionner deux fois par erreur
+          // (celle déjà assignée à cette ligne-ci reste bien proposée).
+          const usedElsewhere = new Set(
+            match.teamResults.filter((other) => other.id !== tr.id && other.offlineScrimTeamId).map((other) => other.offlineScrimTeamId)
+          );
+          const availableTeams = teams.filter((t) => !usedElsewhere.has(t.id));
+          return (
+            <TeamResultRow
+              key={tr.id}
+              matchId={match.id}
+              teamResult={tr}
+              teams={availableTeams}
+              onPatchTeamResult={(patch) => onPatchTeamResult(tr.id, patch)}
+              onRemoveTeamResult={() => onRemoveTeamResult(tr.id)}
+              onPatchPlayerResult={(playerResultId, patch) => onPatchPlayerResult(tr.id, playerResultId, patch)}
+              onRemovePlayerResult={(playerResultId) => onRemovePlayerResult(tr.id, playerResultId)}
+              onResultsChanged={onResultsChanged}
+            />
+          );
+        })}
       </div>
 
       <div className="flex items-center justify-between border-t border-border pt-3">
