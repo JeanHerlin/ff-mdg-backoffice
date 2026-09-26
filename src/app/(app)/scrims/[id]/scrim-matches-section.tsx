@@ -598,7 +598,13 @@ function MatchCard({
 
   const registered = match.teamResults.filter((t) => t.isRegistered);
   const unregistered = match.teamResults.filter((t) => !t.isRegistered);
-  const hasInvalidImage = match.images.some((img) => !img.isValidFreeFireResult);
+  // Un ocrError distingue un vrai échec technique (API indisponible/quota
+  // dépassé...) d'une image simplement non reconnue comme écran Free Fire —
+  // les confondre sous le même message a fait chercher un bug de détection
+  // là où l'appel OCR lui-même n'aboutissait jamais.
+  const invalidImages = match.images.filter((img) => !img.isValidFreeFireResult);
+  const errorImages = invalidImages.filter((img) => img.ocrError);
+  const noSignatureImages = invalidImages.filter((img) => !img.ocrError);
 
   async function setMvp(playerResultId: string | null) {
     const data = await apiRequest<{ match: Match }>(`/scrim-matches/${match.id}/mvp`, {
@@ -610,7 +616,16 @@ function MatchCard({
 
   return (
     <div className="flex flex-col gap-4">
-      {hasInvalidImage && (
+      {errorImages.length > 0 && (
+        <p className="flex items-start gap-1.5 text-xs text-accent">
+          <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+          <span>
+            Échec technique de l&apos;analyse OCR (pas un problème de reconnaissance) :{" "}
+            {errorImages.map((img) => img.ocrError).join(" · ")}
+          </span>
+        </p>
+      )}
+      {noSignatureImages.length > 0 && (
         <p className="flex items-center gap-1.5 text-xs text-accent">
           <TriangleAlert className="size-3.5" />
           Une ou plusieurs images n&apos;ont pas été prises en compte (signature Free Fire non détectée).
