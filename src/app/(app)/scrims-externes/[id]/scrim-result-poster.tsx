@@ -70,14 +70,25 @@ function TeamAvatar({ logoUrl, label }: { logoUrl: string | null; label: string 
   );
 }
 
-function HeaderCell({ icon, label, width }: { icon: React.ReactNode; label: string; width: number }) {
+function HeaderCell({
+  icon,
+  label,
+  width,
+  center,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  width: number;
+  center?: boolean;
+}) {
   return (
     <div
       style={{
         width,
         display: "flex",
         alignItems: "center",
-        gap: 4,
+        justifyContent: center ? "center" : "flex-start",
+        gap: 5,
         color: NAVY,
         fontSize: 11,
         fontWeight: 800,
@@ -93,13 +104,18 @@ function HeaderCell({ icon, label, width }: { icon: React.ReactNode; label: stri
 }
 
 function ResultTable({ entries, startRank }: { entries: PosterStandingEntry[]; startRank: number }) {
-  const RANK_W = 44;
-  const TEAM_W = 244;
-  const PLAYED_W = 74;
-  const KILLS_W = 68;
-  const PLACE_W = 100;
-  const BOOYAH_W = 102;
-  const TOTAL_W = 106;
+  // Chaque table dispose de 630px (moitié de l'espace restant une fois les
+  // marges et la table voisine soustraites de WIDTH) — ces largeurs + le gap
+  // (8 × 6) + le padding (10 × 2) tiennent pile dedans, sans quoi les
+  // dernières colonnes (Booyah/Total) se retrouvaient rognées par l'overflow
+  // hidden du conteneur.
+  const RANK_W = 34;
+  const TEAM_W = 168;
+  const PLAYED_W = 62;
+  const KILLS_W = 54;
+  const PLACE_W = 86;
+  const BOOYAH_W = 84;
+  const TOTAL_W = 70;
 
   return (
     <div style={{ flex: 1, borderRadius: 6, overflow: "hidden" }}>
@@ -109,18 +125,18 @@ function ResultTable({ entries, startRank }: { entries: PosterStandingEntry[]; s
           alignItems: "center",
           background: ORANGE,
           height: 38,
-          paddingLeft: 12,
-          paddingRight: 12,
-          gap: 4,
+          paddingLeft: 10,
+          paddingRight: 10,
+          gap: 8,
         }}
       >
         <div style={{ width: RANK_W, color: NAVY, fontSize: 11, fontWeight: 800 }}>#</div>
         <HeaderCell icon={null} label="Team" width={TEAM_W} />
-        <HeaderCell icon={<Flag size={12} strokeWidth={3} />} label="Played" width={PLAYED_W} />
-        <HeaderCell icon={<Crosshair size={12} strokeWidth={3} />} label="Kills" width={KILLS_W} />
-        <HeaderCell icon={<Target size={12} strokeWidth={3} />} label="Place pts" width={PLACE_W} />
-        <HeaderCell icon={<Crown size={12} strokeWidth={3} />} label="Booyah!" width={BOOYAH_W} />
-        <HeaderCell icon={null} label="Total pts" width={TOTAL_W} />
+        <HeaderCell icon={<Flag size={12} strokeWidth={3} />} label="Played" width={PLAYED_W} center />
+        <HeaderCell icon={<Crosshair size={12} strokeWidth={3} />} label="Kills" width={KILLS_W} center />
+        <HeaderCell icon={<Target size={12} strokeWidth={3} />} label="Place pts" width={PLACE_W} center />
+        <HeaderCell icon={<Crown size={12} strokeWidth={3} />} label="Booyah!" width={BOOYAH_W} center />
+        <HeaderCell icon={null} label="Total pts" width={TOTAL_W} center />
       </div>
 
       {entries.map((entry, i) => {
@@ -133,9 +149,9 @@ function ResultTable({ entries, startRank }: { entries: PosterStandingEntry[]; s
               alignItems: "center",
               background: ROW_BG,
               height: 46,
-              paddingLeft: 12,
-              paddingRight: 12,
-              gap: 4,
+              paddingLeft: 10,
+              paddingRight: 10,
+              gap: 8,
               borderBottom: "1px solid rgba(255,255,255,0.06)",
             }}
           >
@@ -173,13 +189,17 @@ function ResultTable({ entries, startRank }: { entries: PosterStandingEntry[]; s
                 {entry.name}
               </span>
             </div>
-            <div style={{ width: PLAYED_W, color: MUTED, fontSize: 14, fontWeight: 600 }}>{entry.matchesPlayed}</div>
-            <div style={{ width: KILLS_W, color: MUTED, fontSize: 14, fontWeight: 600 }}>{entry.totalKills}</div>
-            <div style={{ width: PLACE_W, color: MUTED, fontSize: 14, fontWeight: 600 }}>{entry.totalPlacementPoints}</div>
-            <div style={{ width: BOOYAH_W, fontSize: 14, fontWeight: 700, color: entry.booyahCount > 0 ? GREEN : MUTED }}>
+            <div style={{ width: PLAYED_W, textAlign: "center", color: MUTED, fontSize: 14, fontWeight: 600 }}>{entry.matchesPlayed}</div>
+            <div style={{ width: KILLS_W, textAlign: "center", color: MUTED, fontSize: 14, fontWeight: 600 }}>{entry.totalKills}</div>
+            <div style={{ width: PLACE_W, textAlign: "center", color: MUTED, fontSize: 14, fontWeight: 600 }}>
+              {entry.totalPlacementPoints}
+            </div>
+            <div
+              style={{ width: BOOYAH_W, textAlign: "center", fontSize: 14, fontWeight: 700, color: entry.booyahCount > 0 ? GREEN : MUTED }}
+            >
               {entry.booyahCount > 0 ? entry.booyahCount : "—"}
             </div>
-            <div style={{ width: TOTAL_W, color: AMBER, fontSize: 18, fontWeight: 900 }}>{entry.totalPoints}</div>
+            <div style={{ width: TOTAL_W, textAlign: "center", color: AMBER, fontSize: 18, fontWeight: 900 }}>{entry.totalPoints}</div>
           </div>
         );
       })}
@@ -262,12 +282,12 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
         <span
           style={{
             display: "inline-block",
-            marginTop: 14,
-            padding: "7px 22px",
+            marginTop: 6,
+            padding: "5px 18px",
             borderRadius: 999,
             border: `2px solid ${ORANGE}`,
             color: ORANGE,
-            fontSize: 13,
+            fontSize: 11,
             fontWeight: 800,
             letterSpacing: 1,
             textTransform: "uppercase",
@@ -285,7 +305,8 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
           style={{
             position: "absolute",
             left: -10,
-            bottom: 0,
+            // Alignée sur le haut du tableau, pas plaquée tout en bas.
+            top: 168,
             // Déborde volontairement un peu sous le tableau de gauche (voir
             // ROW_BG semi-transparent) plutôt que de laisser une bande vide.
             width: PHOTO_COLUMN_WIDTH + 30,
