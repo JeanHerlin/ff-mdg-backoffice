@@ -16,6 +16,7 @@ import {
   BarChart3,
   Megaphone,
   UserCog,
+  Archive,
   X,
 } from "lucide-react";
 import { Logo } from "@/components/logo";
@@ -56,6 +57,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/saisons", label: "Saisons", icon: CalendarRange, permission: "saisons" },
       { href: "/scrims", label: "Scrims", icon: Swords, permission: "scrims" },
+      { href: "/scrims-externes", label: "Scrims externes", icon: Archive, permission: "scrims" },
       { href: "/ligues", label: "Ligues & tournois", icon: Trophy, permission: "ligues" },
       { href: "/divisions", label: "Divisions", icon: Layers, permission: "statistiques" },
       { href: "/mercato", label: "Mercato", icon: ArrowLeftRight, permission: "mercato", countKey: "mercato" },
