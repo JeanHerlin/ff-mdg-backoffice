@@ -158,7 +158,7 @@ export function OfflineScrimDetail() {
         </CardContent>
       </Card>
 
-      <OfflineScrimResultsSection scrimId={scrim.id} teams={scrim.teams} />
+      <OfflineScrimResultsSection scrimId={scrim.id} teams={scrim.teams} scrimName={scrim.name} scrimStartAt={scrim.startAt} />
 
       <Sheet open={editOpen} onClose={() => setEditOpen(false)} title="Modifier le scrim">
         <EditScrimForm

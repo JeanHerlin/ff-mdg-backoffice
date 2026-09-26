@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ImagePlus, Loader2, Plus, Trash2, TriangleAlert, Trophy, UserPlus, X } from "lucide-react";
+import { ImageDown, ImagePlus, Loader2, Plus, Trash2, TriangleAlert, Trophy, UserPlus, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { Sheet } from "@/components/ui/sheet";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TabList, TabButton } from "@/components/ui/tabs";
 import { apiRequest, ApiError } from "@/lib/api-client";
+import { OfflineScrimExportDialog } from "./offline-scrim-export-dialog";
 
 const MAX_PLAYERS_PER_TEAM = 4;
 
@@ -70,6 +71,8 @@ interface StandingEntry {
   name: string;
   tag: string | null;
   totalPoints: number;
+  totalPlacementPoints: number;
+  totalKillPoints: number;
   totalKills: number;
   matchesPlayed: number;
   booyahCount: number;
@@ -96,6 +99,8 @@ function GlobalStandingsTable({ standings }: { standings: StandingEntry[] }) {
             <th className="py-2 pr-3 font-medium">Équipe</th>
             <th className="py-2 pr-3 font-medium">Matchs</th>
             <th className="py-2 pr-3 font-medium">Kills</th>
+            <th className="py-2 pr-3 font-medium">Pts placement</th>
+            <th className="py-2 pr-3 font-medium">Pts kills</th>
             <th className="py-2 pr-3 font-medium">Booyah</th>
             <th className="py-2 font-medium">Total</th>
           </tr>
@@ -114,6 +119,8 @@ function GlobalStandingsTable({ standings }: { standings: StandingEntry[] }) {
               </td>
               <td className="py-2 pr-3 text-muted-foreground">{entry.matchesPlayed}</td>
               <td className="py-2 pr-3 text-muted-foreground">{entry.totalKills}</td>
+              <td className="py-2 pr-3 text-muted-foreground">{entry.totalPlacementPoints}</td>
+              <td className="py-2 pr-3 text-muted-foreground">{entry.totalKillPoints}</td>
               <td className="py-2 pr-3 font-semibold text-foreground">{entry.booyahCount}</td>
               <td className="py-2 font-semibold text-foreground">{entry.totalPoints}</td>
             </tr>
@@ -124,12 +131,23 @@ function GlobalStandingsTable({ standings }: { standings: StandingEntry[] }) {
   );
 }
 
-export function OfflineScrimResultsSection({ scrimId, teams }: { scrimId: string; teams: OfflineTeamOption[] }) {
+export function OfflineScrimResultsSection({
+  scrimId,
+  teams,
+  scrimName,
+  scrimStartAt,
+}: {
+  scrimId: string;
+  teams: OfflineTeamOption[];
+  scrimName: string;
+  scrimStartAt: string;
+}) {
   const [matches, setMatches] = useState<Match[]>([]);
   const [standings, setStandings] = useState<StandingEntry[]>([]);
   const [activeTab, setActiveTab] = useState<string>("global");
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Match | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -201,10 +219,16 @@ export function OfflineScrimResultsSection({ scrimId, teams }: { scrimId: string
       <CardHeader className="gap-3">
         <div className="flex flex-row items-center justify-between">
           <CardTitle>Résultats de matchs</CardTitle>
-          <Button size="sm" onClick={() => setAddOpen(true)} disabled={teams.length === 0}>
-            <Plus className="size-4" />
-            Ajouter un résultat
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setExportOpen(true)} disabled={standings.length === 0}>
+              <ImageDown className="size-4" />
+              Exporter en image
+            </Button>
+            <Button size="sm" onClick={() => setAddOpen(true)} disabled={teams.length === 0}>
+              <Plus className="size-4" />
+              Ajouter un résultat
+            </Button>
+          </div>
         </div>
         {teams.length === 0 && (
           <p className="text-xs text-muted-foreground">Ajoutez au moins une équipe avant de saisir un résultat.</p>
@@ -252,6 +276,14 @@ export function OfflineScrimResultsSection({ scrimId, teams }: { scrimId: string
           <p className="text-sm text-muted-foreground">Aucun résultat de match enregistré.</p>
         ) : null}
       </CardContent>
+
+      <OfflineScrimExportDialog
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        scrimId={scrimId}
+        scrimName={scrimName}
+        scrimStartAt={scrimStartAt}
+      />
 
       <Sheet open={addOpen} onClose={() => setAddOpen(false)} title="Ajouter un résultat de match">
         <AddMatchForm
