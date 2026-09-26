@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ImageDown, ImagePlus, Loader2, Plus, Trash2, TriangleAlert, Trophy, UserPlus, X } from "lucide-react";
+import { CheckCircle2, ImageDown, ImagePlus, Loader2, Plus, Trash2, TriangleAlert, Trophy, UserPlus, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -64,6 +64,7 @@ interface Match {
   matchNumber: number;
   images: MatchImage[];
   teamResults: TeamResult[];
+  confirmedAt: string | null;
 }
 
 interface StandingEntry {
@@ -198,6 +199,10 @@ export function OfflineScrimResultsSection({
     );
   }
 
+  function patchMatch(matchId: string, patch: Partial<Match>) {
+    setMatches((prev) => prev.map((m) => (m.id === matchId ? { ...m, ...patch } : m)));
+  }
+
   async function confirmDeleteMatch() {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -242,6 +247,7 @@ export function OfflineScrimResultsSection({
             </TabButton>
             {matches.map((match) => (
               <TabButton key={match.id} active={activeTab === match.id} onClick={() => setActiveTab(match.id)}>
+                {match.confirmedAt && <CheckCircle2 className="mr-1 inline size-3.5 text-primary" />}
                 Match #{match.matchNumber} — {MAP_LABEL[match.map]}
               </TabButton>
             ))}
@@ -270,6 +276,10 @@ export function OfflineScrimResultsSection({
               loadStandings();
             }}
             onResultsChanged={loadStandings}
+            onPatchMatch={(patch) => {
+              patchMatch(activeMatch.id, patch);
+              loadStandings();
+            }}
             onDelete={() => setDeleteTarget(activeMatch)}
           />
         ) : matches.length === 0 ? (
@@ -490,6 +500,7 @@ function MatchCard({
   onPatchPlayerResult,
   onRemovePlayerResult,
   onResultsChanged,
+  onPatchMatch,
   onDelete,
 }: {
   match: Match;
@@ -499,11 +510,22 @@ function MatchCard({
   onPatchPlayerResult: (teamResultId: string, playerResultId: string, patch: Partial<PlayerResult>) => void;
   onRemovePlayerResult: (teamResultId: string, playerResultId: string) => void;
   onResultsChanged: () => void;
+  onPatchMatch: (patch: Partial<Match>) => void;
   onDelete: () => void;
 }) {
-  const assigned = match.teamResults.filter((t) => t.offlineScrimTeamId);
-  const unassigned = match.teamResults.filter((t) => !t.offlineScrimTeamId);
+  const [confirming, setConfirming] = useState(false);
   const hasInvalidImage = match.images.some((img) => !img.isValidFreeFireResult);
+  const hasUnassigned = match.teamResults.some((tr) => !tr.offlineScrimTeamId);
+
+  async function confirmMatch() {
+    setConfirming(true);
+    try {
+      const data = await apiRequest<{ match: Match }>(`/offline-scrim-matches/${match.id}/confirm`, { method: "POST" });
+      if (data?.match) onPatchMatch({ confirmedAt: data.match.confirmedAt });
+    } finally {
+      setConfirming(false);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -529,56 +551,41 @@ function MatchCard({
         </div>
       )}
 
-      <div>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Équipes assignées ({assigned.length})
-        </p>
-        <div className="flex flex-col gap-2">
-          {assigned.length === 0 && <p className="text-sm text-muted-foreground">Aucune.</p>}
-          {assigned.map((tr) => (
-            <TeamResultRow
-              key={tr.id}
-              matchId={match.id}
-              teamResult={tr}
-              teams={teams}
-              onPatchTeamResult={(patch) => onPatchTeamResult(tr.id, patch)}
-              onRemoveTeamResult={() => onRemoveTeamResult(tr.id)}
-              onPatchPlayerResult={(playerResultId, patch) => onPatchPlayerResult(tr.id, playerResultId, patch)}
-              onRemovePlayerResult={(playerResultId) => onRemovePlayerResult(tr.id, playerResultId)}
-              onResultsChanged={onResultsChanged}
-            />
-          ))}
-        </div>
+      <div className="flex flex-col gap-2">
+        {match.teamResults.map((tr) => (
+          <TeamResultRow
+            key={tr.id}
+            matchId={match.id}
+            teamResult={tr}
+            teams={teams}
+            onPatchTeamResult={(patch) => onPatchTeamResult(tr.id, patch)}
+            onRemoveTeamResult={() => onRemoveTeamResult(tr.id)}
+            onPatchPlayerResult={(playerResultId, patch) => onPatchPlayerResult(tr.id, playerResultId, patch)}
+            onRemovePlayerResult={(playerResultId) => onRemovePlayerResult(tr.id, playerResultId)}
+            onResultsChanged={onResultsChanged}
+          />
+        ))}
       </div>
 
-      {unassigned.length > 0 && (
+      <div className="flex items-center justify-between border-t border-border pt-3">
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Non assignées ({unassigned.length})
-          </p>
-          <div className="flex flex-col gap-2">
-            {unassigned.map((tr) => (
-              <TeamResultRow
-                key={tr.id}
-                matchId={match.id}
-                teamResult={tr}
-                teams={teams}
-                onPatchTeamResult={(patch) => onPatchTeamResult(tr.id, patch)}
-                onRemoveTeamResult={() => onRemoveTeamResult(tr.id)}
-                onPatchPlayerResult={(playerResultId, patch) => onPatchPlayerResult(tr.id, playerResultId, patch)}
-                onRemovePlayerResult={(playerResultId) => onRemovePlayerResult(tr.id, playerResultId)}
-                onResultsChanged={onResultsChanged}
-              />
-            ))}
-          </div>
+          {hasUnassigned && !match.confirmedAt && (
+            <p className="text-xs text-accent">Assignez chaque équipe avant de pouvoir confirmer ce résultat.</p>
+          )}
+          {match.confirmedAt && <p className="text-xs text-primary">Résultat confirmé — compte dans le classement.</p>}
         </div>
-      )}
-
-      <div className="flex justify-end border-t border-border pt-3">
-        <Button variant="outline" size="sm" onClick={onDelete}>
-          <Trash2 className="size-4" />
-          Supprimer ce match
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={onDelete}>
+            <Trash2 className="size-4" />
+            Supprimer ce match
+          </Button>
+          {!match.confirmedAt && (
+            <Button size="sm" onClick={confirmMatch} disabled={confirming || hasUnassigned}>
+              {confirming ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+              Confirmer le résultat
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );
