@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ImagePlus, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { ImagePlus, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,6 +52,12 @@ export function OfflineScrimDetail() {
   const [editOpen, setEditOpen] = useState(false);
   const [teamFormOpen, setTeamFormOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState<OfflineScrimTeam | null>(null);
+  // Incrémenté à chaque ouverture du formulaire (ajout ou modification) —
+  // sert de key à TeamForm pour forcer un remontage complet à chaque fois :
+  // sans ça, ouvrir "Ajouter une équipe" juste après en avoir créé une garde
+  // le nom/tag/logo de la précédente saisie (le Sheet ne démonte jamais ses
+  // enfants, seul un changement de key le force).
+  const [teamFormKey, setTeamFormKey] = useState(0);
   const [deleteTeamTarget, setDeleteTeamTarget] = useState<OfflineScrimTeam | null>(null);
   const [deletingTeam, setDeletingTeam] = useState(false);
   const [deleteScrimOpen, setDeleteScrimOpen] = useState(false);
@@ -126,6 +132,7 @@ export function OfflineScrimDetail() {
             size="sm"
             onClick={() => {
               setEditingTeam(null);
+              setTeamFormKey((k) => k + 1);
               setTeamFormOpen(true);
             }}
           >
@@ -151,6 +158,7 @@ export function OfflineScrimDetail() {
                   <button
                     onClick={() => {
                       setEditingTeam(team);
+                      setTeamFormKey((k) => k + 1);
                       setTeamFormOpen(true);
                     }}
                     className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -190,6 +198,11 @@ export function OfflineScrimDetail() {
         title={editingTeam ? "Modifier l'équipe" : "Ajouter une équipe"}
       >
         <TeamForm
+          // Remonte un composant tout neuf à chaque ouverture (ajout ou
+          // modification, même équipe ou non) — sans ça, le formulaire garde
+          // l'état (nom, tag, logo) de la précédente ouverture, puisque le
+          // Sheet ne démonte jamais ses enfants.
+          key={teamFormKey}
           scrimId={scrim.id}
           team={editingTeam}
           onSaved={() => {
@@ -271,12 +284,23 @@ function TeamForm({ scrimId, team, onSaved }: { scrimId: string; team: OfflineSc
   const [tag, setTag] = useState(team?.tag ?? "");
   const [logo, setLogo] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(team?.logoUrl ?? null);
+  // Distinct de logoPreview===null : celui-ci reste vrai même après un
+  // nouveau choix de fichier tant qu'on n'a pas soumis, pour ne jamais
+  // renvoyer removeLogo si un fichier a finalement été choisi entre-temps.
+  const [removeLogo, setRemoveLogo] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function handleLogoChange(file: File | null) {
     setLogo(file);
+    setRemoveLogo(false);
     setLogoPreview(file ? URL.createObjectURL(file) : (team?.logoUrl ?? null));
+  }
+
+  function handleRemoveLogo() {
+    setLogo(null);
+    setLogoPreview(null);
+    setRemoveLogo(true);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -288,6 +312,7 @@ function TeamForm({ scrimId, team, onSaved }: { scrimId: string; team: OfflineSc
       formData.set("name", name.trim());
       if (tag.trim()) formData.set("tag", tag.trim());
       if (logo) formData.set("logo", logo);
+      else if (removeLogo) formData.set("removeLogo", "true");
       if (team) {
         await apiRequest(`/offline-scrims/${scrimId}/teams/${team.id}`, { method: "PATCH", body: formData });
       } else {
@@ -340,6 +365,11 @@ function TeamForm({ scrimId, team, onSaved }: { scrimId: string; team: OfflineSc
             className="hidden"
             onChange={(e) => handleLogoChange(e.target.files?.[0] ?? null)}
           />
+          {logoPreview && (
+            <Button type="button" variant="outline" size="icon" onClick={handleRemoveLogo} title="Retirer le logo">
+              <X className="size-4" />
+            </Button>
+          )}
         </div>
         <p className="text-xs text-muted-foreground">Sans logo, les initiales du tag (ou du nom) sont affichées à la place.</p>
       </div>
