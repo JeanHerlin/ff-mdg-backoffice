@@ -365,7 +365,7 @@ function CornerTriangles() {
 function TitleBlock({ title, hostedBy }: { title: string; hostedBy: string }) {
   return (
     <div style={{ position: "absolute", top: 36, left: 0, right: 0, textAlign: "center" }}>
-      <p style={{ margin: 0, fontSize: 46, fontWeight: 900, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>{title}</p>
+      <p style={{ margin: 0, fontSize: 42, fontWeight: 900, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>{title}</p>
       <span
         style={{
           display: "inline-block",
@@ -428,7 +428,17 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
   const rowCount = Math.max(left.length, right.length, 1);
   const height = posterHeight(rowCount);
   const crownExtra = showChampionRush ? CHAMPION_COL_W + CHAMPION_COL_GAP : 0;
-  const tableWidth = (WIDTH - 40 - PHOTO_COLUMN_WIDTH - 40) / 2 - crownExtra;
+  // Largeur du bloc tableau — TOUJOURS la même, avec ou sans photo (voir plus
+  // bas) : seule sa POSITION change, jamais sa taille (sinon les colonnes des
+  // deux ResultTable se recalculeraient et ne correspondraient plus au
+  // classement rendu).
+  const contentWidth = WIDTH - 40 - PHOTO_COLUMN_WIDTH - 40;
+  const tableWidth = contentWidth / 2 - crownExtra;
+  // Avec photo : ancrée à gauche de la colonne réservée à la photo, comme
+  // avant. Sans photo : recentrée dans toute la largeur de l'affiche (marges
+  // gauche/droite égales) au lieu de laisser un grand vide à gauche.
+  const tableLeft = photoDataUrl ? PHOTO_COLUMN_WIDTH : (WIDTH - contentWidth) / 2;
+  const tableRight = photoDataUrl ? 40 : (WIDTH - contentWidth) / 2;
 
   return (
     <div
@@ -458,7 +468,7 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
       <TitleBlock title={title} hostedBy={hostedBy} />
       {mapLabel && <MapLabel label={mapLabel} />}
 
-      <div style={{ position: "absolute", top: TABLE_TOP, left: PHOTO_COLUMN_WIDTH, right: 40, display: "flex", gap: 40 }}>
+      <div style={{ position: "absolute", top: TABLE_TOP, left: tableLeft, right: tableRight, display: "flex", gap: 40 }}>
         <div style={{ display: "flex", gap: CHAMPION_COL_GAP, flex: 1 }}>
           {showChampionRush && <ChampionRushColumn entries={left} />}
           <ResultTable entries={left} startRank={1} width={tableWidth} roundedLeft={!showChampionRush} />
@@ -473,7 +483,7 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
         style={{
           position: "absolute",
           top: TABLE_TOP + (TABLE_HEADER_H + rowCount * ROW_H) / 2 - 34,
-          left: PHOTO_COLUMN_WIDTH + (WIDTH - 40 - PHOTO_COLUMN_WIDTH) / 2 - 34,
+          left: tableLeft + contentWidth / 2 - 34,
           width: 68,
           height: 68,
           borderRadius: "50%",
@@ -489,7 +499,7 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
         <img src={logoSrc} alt="" width={60} height={60} style={{ borderRadius: "50%" }} />
       </div>
 
-      <div style={{ position: "absolute", bottom: 22, left: PHOTO_COLUMN_WIDTH, color: "#8A93A6", fontSize: 15 }}>{dateLabel}</div>
+      <div style={{ position: "absolute", bottom: 22, left: tableLeft, color: "#8A93A6", fontSize: 15 }}>{dateLabel}</div>
     </div>
   );
 });
@@ -511,7 +521,12 @@ export const ScrimResultPosterPortrait = forwardRef<HTMLDivElement, ScrimResultP
   const rowCount = Math.max(standings.length, 1);
   const height = posterHeight(rowCount);
   const crownExtra = showChampionRush ? CHAMPION_COL_W + CHAMPION_COL_GAP : 0;
-  const tableWidth = WIDTH_PORTRAIT - 40 - PHOTO_COLUMN_WIDTH_PORTRAIT - crownExtra;
+  // Même principe que la variante paysage : la largeur du bloc ne change
+  // jamais, seule sa position se recentre en l'absence de photo.
+  const contentWidth = WIDTH_PORTRAIT - 40 - PHOTO_COLUMN_WIDTH_PORTRAIT;
+  const tableWidth = contentWidth - crownExtra;
+  const tableLeft = photoDataUrl ? PHOTO_COLUMN_WIDTH_PORTRAIT : (WIDTH_PORTRAIT - contentWidth) / 2;
+  const tableRight = photoDataUrl ? 40 : (WIDTH_PORTRAIT - contentWidth) / 2;
 
   return (
     <div
@@ -541,12 +556,12 @@ export const ScrimResultPosterPortrait = forwardRef<HTMLDivElement, ScrimResultP
       <TitleBlock title={title} hostedBy={hostedBy} />
       {mapLabel && <MapLabel label={mapLabel} />}
 
-      <div style={{ position: "absolute", top: TABLE_TOP, left: PHOTO_COLUMN_WIDTH_PORTRAIT, right: 40, display: "flex", gap: CHAMPION_COL_GAP }}>
+      <div style={{ position: "absolute", top: TABLE_TOP, left: tableLeft, right: tableRight, display: "flex", gap: CHAMPION_COL_GAP }}>
         {showChampionRush && <ChampionRushColumn entries={standings} />}
         <ResultTable entries={standings} startRank={1} width={tableWidth} roundedLeft={!showChampionRush} />
       </div>
 
-      <div style={{ position: "absolute", bottom: 22, left: PHOTO_COLUMN_WIDTH_PORTRAIT, color: "#8A93A6", fontSize: 15 }}>{dateLabel}</div>
+      <div style={{ position: "absolute", bottom: 22, left: tableLeft, color: "#8A93A6", fontSize: 15 }}>{dateLabel}</div>
     </div>
   );
 });
