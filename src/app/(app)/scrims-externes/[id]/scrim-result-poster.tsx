@@ -137,7 +137,21 @@ const BASE_INNER = Object.values(BASE_COLUMNS).reduce((a, b) => a + b, 0);
 const PADDING = 10;
 const GAP = 8;
 
-function ResultTable({ entries, startRank, width }: { entries: PosterStandingEntry[]; startRank: number; width: number }) {
+function ResultTable({
+  entries,
+  startRank,
+  width,
+  roundedLeft = true,
+}: {
+  entries: PosterStandingEntry[];
+  startRank: number;
+  width: number;
+  // false quand la colonne couronne est accolée juste avant (voir
+  // ChampionRushColumn) — les coins gauches sont alors carrés pour que les
+  // deux blocs se lisent comme un seul tableau continu, sans coin arrondi
+  // "en trop" au milieu.
+  roundedLeft?: boolean;
+}) {
   const ratio = (width - PADDING * 2 - GAP * 6) / BASE_INNER;
   const RANK_W = Math.round(BASE_COLUMNS.RANK * ratio);
   const TEAM_W = Math.round(BASE_COLUMNS.TEAM * ratio);
@@ -148,7 +162,16 @@ function ResultTable({ entries, startRank, width }: { entries: PosterStandingEnt
   const TOTAL_W = Math.round(BASE_COLUMNS.TOTAL * ratio);
 
   return (
-    <div style={{ width, borderRadius: 6, overflow: "hidden" }}>
+    <div
+      style={{
+        width,
+        borderTopLeftRadius: roundedLeft ? 6 : 0,
+        borderBottomLeftRadius: roundedLeft ? 6 : 0,
+        borderTopRightRadius: 6,
+        borderBottomRightRadius: 6,
+        overflow: "hidden",
+      }}
+    >
       <div
         style={{
           display: "flex",
@@ -237,19 +260,30 @@ function ResultTable({ entries, startRank, width }: { entries: PosterStandingEnt
   );
 }
 
-// Colonne dédiée sans en-tête, toujours devant le tableau — jamais à
-// l'intérieur de ResultTable, pour ne jamais toucher aux largeurs/colonnes
-// actuelles : le tableau existant reste rigoureusement inchangé, cette
-// colonne vient juste s'ajouter à côté (voir ScrimResultPoster, qui réduit
-// d'autant la largeur donnée au tableau pour garder le même encombrement
-// global).
-const CHAMPION_COL_W = 30;
-const CHAMPION_COL_GAP = 8;
+// Colonne dédiée sans en-tête, accolée juste devant le tableau (aucun espace
+// entre les deux, voir CHAMPION_COL_GAP=0 et roundedLeft=false sur
+// ResultTable) — jamais à l'intérieur de ResultTable, pour ne jamais toucher
+// aux largeurs/colonnes actuelles : le tableau existant reste rigoureusement
+// inchangé, cette colonne vient juste s'accoler à gauche (voir
+// ScrimResultPoster, qui réduit d'autant la largeur donnée au tableau pour
+// garder le même encombrement global). Même fond que l'en-tête/les lignes du
+// tableau pour lire l'ensemble comme un seul bloc continu.
+const CHAMPION_COL_W = 40;
+const CHAMPION_COL_GAP = 0;
 
 function ChampionRushColumn({ entries }: { entries: PosterStandingEntry[] }) {
   return (
-    <div style={{ width: CHAMPION_COL_W, display: "flex", flexDirection: "column" }}>
-      <div style={{ height: TABLE_HEADER_H }} />
+    <div
+      style={{
+        width: CHAMPION_COL_W,
+        display: "flex",
+        flexDirection: "column",
+        borderTopLeftRadius: 6,
+        borderBottomLeftRadius: 6,
+        overflow: "hidden",
+      }}
+    >
+      <div style={{ height: TABLE_HEADER_H, background: ORANGE }} />
       {entries.map((entry, i) => (
         <div
           key={i}
@@ -258,21 +292,23 @@ function ChampionRushColumn({ entries }: { entries: PosterStandingEntry[] }) {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            background: entry.isChampion ? CHAMPION_ROW_BG : ROW_BG,
+            borderBottom: "1px solid rgba(255,255,255,0.06)",
           }}
         >
           {entry.championRushQualified && (
             <div
               style={{
-                width: 24,
-                height: 24,
-                borderRadius: "50%",
+                width: 30,
+                height: 30,
+                borderRadius: 8,
                 background: GOLD,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Crown size={13} strokeWidth={2.5} color={NAVY} />
+              <Crown size={18} strokeWidth={2.5} color={NAVY} />
             </div>
           )}
         </div>
@@ -411,11 +447,11 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
       <div style={{ position: "absolute", top: TABLE_TOP, left: PHOTO_COLUMN_WIDTH, right: 40, display: "flex", gap: 40 }}>
         <div style={{ display: "flex", gap: CHAMPION_COL_GAP, flex: 1 }}>
           {showChampionRush && <ChampionRushColumn entries={left} />}
-          <ResultTable entries={left} startRank={1} width={tableWidth} />
+          <ResultTable entries={left} startRank={1} width={tableWidth} roundedLeft={!showChampionRush} />
         </div>
         <div style={{ display: "flex", gap: CHAMPION_COL_GAP, flex: 1 }}>
           {showChampionRush && <ChampionRushColumn entries={right} />}
-          <ResultTable entries={right} startRank={half + 1} width={tableWidth} />
+          <ResultTable entries={right} startRank={half + 1} width={tableWidth} roundedLeft={!showChampionRush} />
         </div>
       </div>
 
@@ -493,7 +529,7 @@ export const ScrimResultPosterPortrait = forwardRef<HTMLDivElement, ScrimResultP
 
       <div style={{ position: "absolute", top: TABLE_TOP, left: PHOTO_COLUMN_WIDTH_PORTRAIT, right: 40, display: "flex", gap: CHAMPION_COL_GAP }}>
         {showChampionRush && <ChampionRushColumn entries={standings} />}
-        <ResultTable entries={standings} startRank={1} width={tableWidth} />
+        <ResultTable entries={standings} startRank={1} width={tableWidth} roundedLeft={!showChampionRush} />
       </div>
 
       <div style={{ position: "absolute", bottom: 22, left: PHOTO_COLUMN_WIDTH_PORTRAIT, color: "#8A93A6", fontSize: 15 }}>{dateLabel}</div>

@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ImagePlus, Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { Crown, ImagePlus, Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -120,6 +121,12 @@ export function OfflineScrimDetail() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">{scrim.name}</h1>
           <p className="mt-1 text-sm text-muted-foreground">Début : {formatDate(scrim.startAt)}</p>
+          {scrim.isChampionRush && (
+            <Badge variant="outline" className="mt-2 border-amber-400/50 text-amber-500">
+              <Crown className="size-3.5" />
+              Mode Champion Rush — {scrim.championRushThreshold} pts à atteindre
+            </Badge>
+          )}
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setEditOpen(true)}>
