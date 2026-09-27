@@ -35,6 +35,20 @@ function slugify(name: string) {
   );
 }
 
+// Un Booyah gagné PILE dans le match où l'équipe franchit le seuil de points
+// ne suffit pas à en faire la championne (le Booyah de ce match a déjà servi
+// à passer le seuil) — il en faut un AUTRE, dans un match différent, avant ou
+// après. matches est trié chronologiquement (voir PosterStandingEntry).
+function hasBooyahOutsideCrossingMatch(matches: { points: number; booyah: boolean }[], threshold: number): boolean {
+  let running = 0;
+  let crossingIndex = -1;
+  for (let i = 0; i < matches.length; i++) {
+    running += matches[i].points;
+    if (crossingIndex === -1 && running >= threshold) crossingIndex = i;
+  }
+  return matches.some((m, i) => m.booyah && i !== crossingIndex);
+}
+
 async function downloadNode(node: HTMLDivElement, filename: string) {
   // pixelRatio 2 : export net même zoomé/imprimé, la capture ignore de toute
   // façon la réduction visuelle appliquée à l'aperçu.
@@ -114,15 +128,19 @@ export function OfflineScrimExportDialog({
     if (!standings) return null;
     if (!showToggle || !championRushOn || championRushThreshold == null) return standings;
     // Plusieurs équipes peuvent être "qualifiées" (seuil atteint), mais UNE
-    // SEULE est "la championne" — celle qui a en plus décroché un Booyah.
+    // SEULE est "la championne" — celle qui a en plus décroché un Booyah dans
+    // un AUTRE match que celui où elle a franchi le seuil (voir
+    // hasBooyahOutsideCrossingMatch : un Booyah pile dans le match qui fait
+    // passer le seuil ne compte pas, il en faut un second, ailleurs).
     // standings est déjà trié par points décroissants, donc la première
     // équipe qui remplit les deux conditions est forcément la mieux classée
     // parmi elles : on s'arrête à elle pour ne jamais surligner deux lignes
-    // à la fois, même si une autre équipe qualifiée a aussi un Booyah.
+    // à la fois.
     let championFound = false;
     return standings.map((entry) => {
       const qualified = entry.totalPoints >= championRushThreshold;
-      const isChampion = !championFound && qualified && entry.booyahCount > 0;
+      const eligible = qualified && hasBooyahOutsideCrossingMatch(entry.matches ?? [], championRushThreshold);
+      const isChampion = !championFound && eligible;
       if (isChampion) championFound = true;
       return { ...entry, championRushQualified: qualified, isChampion };
     });

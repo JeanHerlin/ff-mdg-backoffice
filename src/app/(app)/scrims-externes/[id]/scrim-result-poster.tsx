@@ -64,6 +64,11 @@ export interface PosterStandingEntry {
   totalPlacementPoints: number;
   booyahCount: number;
   totalPoints: number;
+  // Un point par match confirmé, dans l'ordre chronologique (voir
+  // offline-scrim-matches.repository.getStandings) — sert uniquement au
+  // calcul Champion Rush côté export (voir offline-scrim-export-dialog),
+  // absent pour un export par map (buildMapStandings, un seul match).
+  matches?: { points: number; booyah: boolean }[];
   // Calculés côté appelant (voir offline-scrim-export-dialog) à partir du
   // seuil du scrim — le composant n'a besoin de connaître que ces deux
   // booléens, jamais le seuil lui-même.
