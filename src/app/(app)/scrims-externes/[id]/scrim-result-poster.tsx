@@ -39,13 +39,17 @@ export function posterHeight(rowCount: number) {
 
 // Le format paysage est un vrai 1920×1080 (16:9) fixe, pas une hauteur qui
 // grandit avec le nombre d'équipes — voir ScrimResultPoster, qui calcule une
-// hauteur de ligne adaptative (rowHeight, toujours ≤ ROW_H) pour que toutes
-// les équipes tiennent toujours dans ces 1080px, quel que soit leur nombre :
-// avec peu d'équipes les lignes gardent leur taille normale (ROW_H) et de
-// l'espace vide reste sous le tableau ; avec beaucoup d'équipes les lignes
-// (et leur contenu : avatar, police...) rétrécissent proportionnellement
-// plutôt que de déborder ou d'être coupées.
+// hauteur de ligne adaptative (rowHeight, toujours ≤ LANDSCAPE_ROW_H) pour
+// que toutes les équipes tiennent toujours dans ces 1080px, quel que soit
+// leur nombre : avec peu d'équipes les lignes montent jusqu'à leur taille
+// normale et de l'espace vide reste sous le tableau ; avec beaucoup d'équipes
+// les lignes (et leur contenu : avatar, police...) rétrécissent
+// proportionnellement plutôt que de déborder ou d'être coupées.
 export const POSTER_HEIGHT_LANDSCAPE = 1080;
+// Plus haut que ROW_H (46, utilisé par le portrait) — le format paysage a de
+// la marge en bas une fois la hauteur fixée à 1080px, autant en profiter pour
+// des lignes un peu plus confortables tant que le nombre d'équipes le permet.
+const LANDSCAPE_ROW_H = 54;
 // Même marge basse que posterHeight() (le "+90" de sa formule) — reproduite
 // ici pour que le calcul de hauteur de ligne adaptative parte du même repère
 // visuel (espace réservé sous le tableau avant le bord de l'affiche).
@@ -469,13 +473,15 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
   const right = standings.slice(half);
   const rowCount = Math.max(left.length, right.length, 1);
   const height = POSTER_HEIGHT_LANDSCAPE;
-  // Hauteur de ligne adaptative : à taille normale (ROW_H) tant que ça tient
-  // dans le budget vertical fixe, rétrécie proportionnellement sinon — jamais
-  // de coupure, quel que soit le nombre d'équipes (voir POSTER_HEIGHT_LANDSCAPE
-  // et ResultTable/ChampionRushColumn, qui suivent avec avatar/police à
-  // l'échelle).
+  // Hauteur de ligne adaptative : à taille "confortable" (LANDSCAPE_ROW_H)
+  // tant que ça tient dans le budget vertical fixe, rétrécie
+  // proportionnellement sinon — jamais de coupure, quel que soit le nombre
+  // d'équipes (voir POSTER_HEIGHT_LANDSCAPE et ResultTable/ChampionRushColumn,
+  // qui suivent avec avatar/police à l'échelle, plafonnée à leur taille
+  // d'origine calée sur ROW_H : une ligne plus haute que ROW_H ne fait donc
+  // qu'ajouter de l'air autour du contenu, jamais l'agrandir).
   const availableRowsHeight = height - TABLE_TOP - LANDSCAPE_BOTTOM_MARGIN - TABLE_HEADER_H;
-  const rowH = Math.min(ROW_H, availableRowsHeight / rowCount);
+  const rowH = Math.min(LANDSCAPE_ROW_H, availableRowsHeight / rowCount);
   const crownExtra = showChampionRush ? CHAMPION_COL_W + CHAMPION_COL_GAP : 0;
   // Largeur entre les deux tableaux (le "gap" du conteneur flex ci-dessous,
   // voir JSX) — TOUJOURS la même valeur, avec ou sans photo, pour que le
