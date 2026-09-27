@@ -12,10 +12,14 @@ const NAVY = "#1B2438";
 // deux composants plus bas), elle reste devinable derrière sans jamais nuire
 // à la lisibilité du texte (blanc, fortement contrasté même à 90% d'opacité).
 const ROW_BG = "rgba(20,28,46,0.92)";
-// Ligne d'une équipe championne (Booyah + seuil Champion Rush atteint) —
-// même teinte or que la colonne couronne, pour la repérer d'un coup d'œil
-// sans jamais se confondre avec le fond des autres lignes.
-const CHAMPION_ROW_BG = "rgba(245,196,66,0.35)";
+// Ligne d'une équipe championne (Booyah + seuil Champion Rush atteint) — fond
+// plein (pas de superposition transparente sur ROW_BG, ça donnait un brun
+// terne où le texte blanc/ambre devenait illisible) : voir ResultTable, tout
+// le texte de cette ligne bascule sur CHAMPION_ROW_TEXT au lieu des couleurs
+// habituelles (blanc/gris/ambre) pour rester lisible sur ce fond clair.
+const CHAMPION_ROW_BG = "#F2C14E";
+const CHAMPION_ROW_TEXT = "#3D2B05";
+const CHAMPION_ROW_MUTED = "rgba(61,43,5,0.65)";
 const GOLD = "#F5C842";
 const AMBER = "#FDBA47";
 const GREEN = "#3ADC7A";
@@ -194,18 +198,25 @@ function ResultTable({
 
       {entries.map((entry, i) => {
         const rank = startRank + i;
+        const champion = entry.isChampion;
+        // Fond clair (CHAMPION_ROW_BG) sur la ligne championne : tout le
+        // texte bascule sur des teintes sombres dédiées (CHAMPION_ROW_TEXT/
+        // CHAMPION_ROW_MUTED) au lieu du blanc/gris/ambre habituel, illisible
+        // sur un fond clair.
+        const textColor = champion ? CHAMPION_ROW_TEXT : "#fff";
+        const mutedColor = champion ? CHAMPION_ROW_MUTED : MUTED;
         return (
           <div
             key={`${rank}-${entry.name}`}
             style={{
               display: "flex",
               alignItems: "center",
-              background: entry.isChampion ? CHAMPION_ROW_BG : ROW_BG,
+              background: champion ? CHAMPION_ROW_BG : ROW_BG,
               height: ROW_H,
               paddingLeft: PADDING,
               paddingRight: PADDING,
               gap: GAP,
-              borderBottom: "1px solid rgba(255,255,255,0.06)",
+              borderBottom: champion ? "1px solid rgba(61,43,5,0.15)" : "1px solid rgba(255,255,255,0.06)",
             }}
           >
             <div style={{ width: RANK_W, display: "flex" }}>
@@ -219,7 +230,7 @@ function ResultTable({
                   borderRadius: 6,
                   fontSize: 14,
                   fontWeight: 800,
-                  color: rank === 1 ? NAVY : "#fff",
+                  color: rank === 1 ? NAVY : textColor,
                   background: rank === 1 ? GOLD : "transparent",
                 }}
               >
@@ -230,7 +241,7 @@ function ResultTable({
               <TeamAvatar logoUrl={entry.logoUrl} label={entry.tag ?? entry.name} />
               <span
                 style={{
-                  color: "#fff",
+                  color: textColor,
                   fontSize: 14,
                   fontWeight: 800,
                   textTransform: "uppercase",
@@ -242,17 +253,25 @@ function ResultTable({
                 {entry.name}
               </span>
             </div>
-            <div style={{ width: PLAYED_W, textAlign: "center", color: MUTED, fontSize: 14, fontWeight: 600 }}>{entry.matchesPlayed}</div>
-            <div style={{ width: KILLS_W, textAlign: "center", color: MUTED, fontSize: 14, fontWeight: 600 }}>{entry.totalKills}</div>
-            <div style={{ width: PLACE_W, textAlign: "center", color: MUTED, fontSize: 14, fontWeight: 600 }}>
+            <div style={{ width: PLAYED_W, textAlign: "center", color: mutedColor, fontSize: 14, fontWeight: 600 }}>{entry.matchesPlayed}</div>
+            <div style={{ width: KILLS_W, textAlign: "center", color: mutedColor, fontSize: 14, fontWeight: 600 }}>{entry.totalKills}</div>
+            <div style={{ width: PLACE_W, textAlign: "center", color: mutedColor, fontSize: 14, fontWeight: 600 }}>
               {entry.totalPlacementPoints}
             </div>
             <div
-              style={{ width: BOOYAH_W, textAlign: "center", fontSize: 14, fontWeight: 700, color: entry.booyahCount > 0 ? GREEN : MUTED }}
+              style={{
+                width: BOOYAH_W,
+                textAlign: "center",
+                fontSize: 14,
+                fontWeight: 700,
+                color: entry.booyahCount > 0 ? (champion ? CHAMPION_ROW_TEXT : GREEN) : mutedColor,
+              }}
             >
               {entry.booyahCount > 0 ? entry.booyahCount : "—"}
             </div>
-            <div style={{ width: TOTAL_W, textAlign: "center", color: AMBER, fontSize: 18, fontWeight: 900 }}>{entry.totalPoints}</div>
+            <div style={{ width: TOTAL_W, textAlign: "center", color: champion ? CHAMPION_ROW_TEXT : AMBER, fontSize: 18, fontWeight: 900 }}>
+              {entry.totalPoints}
+            </div>
           </div>
         );
       })}
@@ -293,7 +312,7 @@ function ChampionRushColumn({ entries }: { entries: PosterStandingEntry[] }) {
             alignItems: "center",
             justifyContent: "center",
             background: entry.isChampion ? CHAMPION_ROW_BG : ROW_BG,
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
+            borderBottom: entry.isChampion ? "1px solid rgba(61,43,5,0.15)" : "1px solid rgba(255,255,255,0.06)",
           }}
         >
           {entry.championRushQualified && (
@@ -303,6 +322,9 @@ function ChampionRushColumn({ entries }: { entries: PosterStandingEntry[] }) {
                 height: 30,
                 borderRadius: 8,
                 background: GOLD,
+                // Anneau marine — sans lui, le carré or se fond dans une ligne
+                // championne (même fond or plein), voir CHAMPION_ROW_BG.
+                border: `2px solid ${NAVY}`,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",

@@ -105,9 +105,18 @@ export function OfflineScrimExportDialog({
   const displayStandings = useMemo(() => {
     if (!standings) return null;
     if (!showToggle || !championRushOn || championRushThreshold == null) return standings;
+    // Plusieurs équipes peuvent être "qualifiées" (seuil atteint), mais UNE
+    // SEULE est "la championne" — celle qui a en plus décroché un Booyah.
+    // standings est déjà trié par points décroissants, donc la première
+    // équipe qui remplit les deux conditions est forcément la mieux classée
+    // parmi elles : on s'arrête à elle pour ne jamais surligner deux lignes
+    // à la fois, même si une autre équipe qualifiée a aussi un Booyah.
+    let championFound = false;
     return standings.map((entry) => {
       const qualified = entry.totalPoints >= championRushThreshold;
-      return { ...entry, championRushQualified: qualified, isChampion: qualified && entry.booyahCount > 0 };
+      const isChampion = !championFound && qualified && entry.booyahCount > 0;
+      if (isChampion) championFound = true;
+      return { ...entry, championRushQualified: qualified, isChampion };
     });
   }, [standings, showToggle, championRushOn, championRushThreshold]);
 
