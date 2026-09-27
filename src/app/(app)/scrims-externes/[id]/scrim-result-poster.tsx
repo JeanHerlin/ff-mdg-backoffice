@@ -281,9 +281,11 @@ function ChampionRushColumn({ entries }: { entries: PosterStandingEntry[] }) {
   );
 }
 
+// Même niveau vertical que la date (voir bottom:22 dans les deux variantes
+// ci-dessous), mais à droite plutôt qu'à gauche — jamais en haut.
 function MapLabel({ label }: { label: string }) {
   return (
-    <div style={{ position: "absolute", top: 40, right: 40, color: NAVY, fontSize: 13, fontWeight: 800, letterSpacing: 0.3 }}>
+    <div style={{ position: "absolute", bottom: 22, right: 40, color: "#8A93A6", fontSize: 15, fontWeight: 700 }}>
       MAP: {label}
     </div>
   );
