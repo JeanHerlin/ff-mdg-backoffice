@@ -266,8 +266,8 @@ function TitleBlock({ title, hostedBy }: { title: string; hostedBy: string }) {
 }
 
 // Toujours peinte AVANT le logo/titre dans le DOM (donc en-dessous) : la
-// photo remonte haut, jusqu'au niveau du petit triangle orange, et ne doit
-// jamais passer par-dessus le logo ou le titre.
+// photo s'aligne sur le bas du petit triangle orange (sa pointe, à gauche,
+// pas son bord haut) et ne doit jamais passer par-dessus le logo ou le titre.
 function HostPhoto({ photoDataUrl, width, height }: { photoDataUrl: string; width: number; height: number }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element -- capturé hors DOM Next.js normal (html-to-image)
@@ -277,7 +277,7 @@ function HostPhoto({ photoDataUrl, width, height }: { photoDataUrl: string; widt
       style={{
         position: "absolute",
         left: -10,
-        top: 10,
+        top: 130,
         width,
         height,
         objectFit: "cover",
