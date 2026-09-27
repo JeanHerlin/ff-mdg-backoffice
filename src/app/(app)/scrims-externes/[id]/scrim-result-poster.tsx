@@ -32,9 +32,11 @@ const ROW_H = 46;
 // marge basse (date) — celui-ci reste en hauteur variable, contrairement au
 // paysage (voir POSTER_HEIGHT_LANDSCAPE plus bas, format fixe 1920×1080).
 // Exportée pour que l'aperçu réduit du panneau d'export calcule la même
-// hauteur sans dupliquer la formule.
-export function posterHeight(rowCount: number) {
-  return 240 + rowCount * ROW_H + 90;
+// hauteur sans dupliquer la formule. hasChampionBanner ajoute la place du
+// bandeau "CHAMPION : ..." (voir ChampionBanner) quand une équipe est
+// effectivement championne.
+export function posterHeight(rowCount: number, hasChampionBanner = false) {
+  return 240 + rowCount * ROW_H + 90 + (hasChampionBanner ? CHAMPION_BANNER_H + CHAMPION_BANNER_GAP : 0);
 }
 
 // Le format paysage est un vrai 1920×1080 (16:9) fixe, pas une hauteur qui
@@ -375,6 +377,76 @@ function ChampionRushColumn({ entries, rowHeight = ROW_H }: { entries: PosterSta
   );
 }
 
+// Bandeau "CHAMPION : {équipe}" affiché au-dessus du tableau — jamais à
+// l'intérieur, le tableau du bas reste rigoureusement inchangé (la
+// championne y reste listée normalement, voir ResultTable/CHAMPION_ROW_BG) :
+// voir ScrimResultPoster/ScrimResultPosterPortrait, qui poussent juste le
+// tableau un peu plus bas (tableTop) pour lui faire de la place, uniquement
+// quand une équipe est effectivement championne (jamais pour une équipe
+// simplement qualifiée).
+export const CHAMPION_BANNER_H = 92;
+export const CHAMPION_BANNER_GAP = 18;
+
+function BannerStat({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        minWidth: 78,
+        padding: "6px 12px",
+        borderRadius: 8,
+        background: highlight ? NAVY : "rgba(27,36,56,0.14)",
+      }}
+    >
+      <span style={{ fontSize: 20, fontWeight: 900, color: highlight ? GOLD : NAVY, lineHeight: 1.1 }}>{value}</span>
+      <span
+        style={{
+          fontSize: 9,
+          fontWeight: 800,
+          letterSpacing: 0.6,
+          textTransform: "uppercase",
+          color: highlight ? "rgba(245,196,66,0.9)" : "rgba(27,36,56,0.65)",
+        }}
+      >
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function ChampionBanner({ entry, width }: { entry: PosterStandingEntry; width: number }) {
+  return (
+    <div
+      style={{
+        width,
+        height: CHAMPION_BANNER_H,
+        borderRadius: 10,
+        background: `linear-gradient(135deg, ${GOLD}, ${AMBER})`,
+        display: "flex",
+        alignItems: "center",
+        gap: 16,
+        padding: "0 20px",
+        boxShadow: "0 4px 14px rgba(0,0,0,0.18)",
+      }}
+    >
+      <TeamAvatar logoUrl={entry.logoUrl} label={entry.tag ?? entry.name} size={56} />
+      <span style={{ fontSize: 22, fontWeight: 900, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, whiteSpace: "nowrap" }}>
+        <Crown size={18} strokeWidth={2.5} style={{ verticalAlign: -3, marginRight: 8 }} />
+        Champion : {entry.name}
+      </span>
+      <div style={{ flex: 1 }} />
+      <div style={{ display: "flex", gap: 10 }}>
+        <BannerStat label="Elimination" value={entry.totalKills} />
+        <BannerStat label="Booyah" value={entry.booyahCount} />
+        <BannerStat label="Total" value={entry.totalPoints} highlight />
+      </div>
+    </div>
+  );
+}
+
 // Même niveau vertical que la date (voir bottom:22 dans les deux variantes
 // ci-dessous), mais à droite plutôt qu'à gauche — jamais en haut.
 function MapLabel({ label }: { label: string }) {
@@ -478,6 +550,13 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
   const right = standings.slice(half);
   const rowCount = Math.max(left.length, right.length, 1);
   const height = POSTER_HEIGHT_LANDSCAPE;
+  // Bandeau "CHAMPION : ..." — uniquement quand une équipe est effectivement
+  // championne (jamais pour une simple qualifiée), voir ChampionBanner. Pousse
+  // le tableau un peu plus bas (tableTop) pour lui faire de la place ; le
+  // tableau lui-même n'est jamais modifié, ni sa position dans la liste.
+  const championEntry = showChampionRush ? standings.find((e) => e.isChampion) : undefined;
+  const bannerExtra = championEntry ? CHAMPION_BANNER_H + CHAMPION_BANNER_GAP : 0;
+  const tableTop = TABLE_TOP + bannerExtra;
   // Hauteur de ligne adaptative : à taille "confortable" (LANDSCAPE_ROW_H)
   // tant que ça tient dans le budget vertical fixe, rétrécie
   // proportionnellement sinon — jamais de coupure, quel que soit le nombre
@@ -485,7 +564,7 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
   // qui suivent avec avatar/police à l'échelle, plafonnée à leur taille
   // d'origine calée sur ROW_H : une ligne plus haute que ROW_H ne fait donc
   // qu'ajouter de l'air autour du contenu, jamais l'agrandir).
-  const availableRowsHeight = height - TABLE_TOP - LANDSCAPE_BOTTOM_MARGIN - TABLE_HEADER_H;
+  const availableRowsHeight = height - tableTop - LANDSCAPE_BOTTOM_MARGIN - TABLE_HEADER_H;
   const rowH = Math.min(LANDSCAPE_ROW_H, availableRowsHeight / rowCount);
   const crownExtra = showChampionRush ? CHAMPION_COL_W + CHAMPION_COL_GAP : 0;
   // Largeur entre les deux tableaux (le "gap" du conteneur flex ci-dessous,
@@ -518,7 +597,7 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
   // tableau (rowH adaptatif compris), jamais une valeur fixe déconnectée du
   // nombre d'équipes.
   const PHOTO_OVERSHOOT = 24;
-  const tableBottomY = TABLE_TOP + TABLE_HEADER_H + rowCount * rowH;
+  const tableBottomY = tableTop + TABLE_HEADER_H + rowCount * rowH;
   const photoHeight = tableBottomY + PHOTO_OVERSHOOT - HOST_PHOTO_TOP;
 
   return (
@@ -548,8 +627,13 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
 
       <TitleBlock title={title} hostedBy={hostedBy} />
       {mapLabel && <MapLabel label={mapLabel} />}
+      {championEntry && (
+        <div style={{ position: "absolute", top: TABLE_TOP, left: tableLeft, width: containerWidth }}>
+          <ChampionBanner entry={championEntry} width={containerWidth} />
+        </div>
+      )}
 
-      <div style={{ position: "absolute", top: TABLE_TOP, left: tableLeft, right: tableRight, display: "flex", gap: SIDE_GAP }}>
+      <div style={{ position: "absolute", top: tableTop, left: tableLeft, right: tableRight, display: "flex", gap: SIDE_GAP }}>
         <div style={{ display: "flex", gap: CHAMPION_COL_GAP, flex: 1 }}>
           {showChampionRush && <ChampionRushColumn entries={left} rowHeight={rowH} />}
           <ResultTable entries={left} startRank={1} width={tableWidth} roundedLeft={!showChampionRush} rowHeight={rowH} />
@@ -563,7 +647,7 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
       <div
         style={{
           position: "absolute",
-          top: TABLE_TOP + (TABLE_HEADER_H + rowCount * rowH) / 2 - 34,
+          top: tableTop + (TABLE_HEADER_H + rowCount * rowH) / 2 - 34,
           left: logoCenterX - 34,
           width: 68,
           height: 68,
@@ -600,7 +684,12 @@ export const ScrimResultPosterPortrait = forwardRef<HTMLDivElement, ScrimResultP
   ref
 ) {
   const rowCount = Math.max(standings.length, 1);
-  const height = posterHeight(rowCount);
+  // Bandeau "CHAMPION : ..." — voir son équivalent dans ScrimResultPoster
+  // (paysage) pour le détail du raisonnement.
+  const championEntry = showChampionRush ? standings.find((e) => e.isChampion) : undefined;
+  const bannerExtra = championEntry ? CHAMPION_BANNER_H + CHAMPION_BANNER_GAP : 0;
+  const tableTop = TABLE_TOP + bannerExtra;
+  const height = posterHeight(rowCount, !!championEntry);
   const crownExtra = showChampionRush ? CHAMPION_COL_W + CHAMPION_COL_GAP : 0;
   // Même principe que la variante paysage : la largeur du bloc ne change
   // jamais, seule sa position se recentre en l'absence de photo.
@@ -623,7 +712,9 @@ export const ScrimResultPosterPortrait = forwardRef<HTMLDivElement, ScrimResultP
     >
       <CornerTriangles />
 
-      {photoDataUrl && <HostPhoto photoDataUrl={photoDataUrl} width={PHOTO_COLUMN_WIDTH_PORTRAIT + 80} height={TABLE_HEADER_H + rowCount * ROW_H} />}
+      {photoDataUrl && (
+        <HostPhoto photoDataUrl={photoDataUrl} width={PHOTO_COLUMN_WIDTH_PORTRAIT + 80} height={TABLE_HEADER_H + rowCount * ROW_H + bannerExtra} />
+      )}
 
       {/* eslint-disable-next-line @next/next/no-img-element -- capturé hors DOM Next.js normal (html-to-image) */}
       <img
@@ -636,8 +727,13 @@ export const ScrimResultPosterPortrait = forwardRef<HTMLDivElement, ScrimResultP
 
       <TitleBlock title={title} hostedBy={hostedBy} />
       {mapLabel && <MapLabel label={mapLabel} />}
+      {championEntry && (
+        <div style={{ position: "absolute", top: TABLE_TOP, left: tableLeft, width: contentWidth }}>
+          <ChampionBanner entry={championEntry} width={contentWidth} />
+        </div>
+      )}
 
-      <div style={{ position: "absolute", top: TABLE_TOP, left: tableLeft, right: tableRight, display: "flex", gap: CHAMPION_COL_GAP }}>
+      <div style={{ position: "absolute", top: tableTop, left: tableLeft, right: tableRight, display: "flex", gap: CHAMPION_COL_GAP }}>
         {showChampionRush && <ChampionRushColumn entries={standings} />}
         <ResultTable entries={standings} startRank={1} width={tableWidth} roundedLeft={!showChampionRush} />
       </div>

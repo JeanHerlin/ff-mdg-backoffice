@@ -178,6 +178,11 @@ export function OfflineScrimExportDialog({
   const landscapeScale = PREVIEW_WIDTH / POSTER_WIDTH;
   const portraitScale = PREVIEW_WIDTH / POSTER_WIDTH_PORTRAIT;
   const portraitRowCount = displayStandings ? Math.max(displayStandings.length, 1) : 1;
+  // Le bandeau "CHAMPION : ..." (voir scrim-result-poster.tsx) ajoute de la
+  // hauteur en format portrait — l'aperçu doit prévoir la même place que le
+  // composant réellement rendu, sinon son bas se retrouve visuellement rogné
+  // dans le panneau (l'export PNG lui-même reste toujours complet).
+  const hasChampion = displayStandings?.some((e) => e.isChampion) ?? false;
 
   return (
     <Sheet open={open} onClose={onClose} title="Exporter le résultat en image">
@@ -263,7 +268,7 @@ export function OfflineScrimExportDialog({
               <Label>Aperçu — portrait (A4)</Label>
               <div
                 className="overflow-hidden rounded-md border border-border"
-                style={{ width: PREVIEW_WIDTH, height: posterHeight(portraitRowCount) * portraitScale }}
+                style={{ width: PREVIEW_WIDTH, height: posterHeight(portraitRowCount, hasChampion) * portraitScale }}
               >
                 <div style={{ transform: `scale(${portraitScale})`, transformOrigin: "top left" }}>
                   <ScrimResultPosterPortrait
