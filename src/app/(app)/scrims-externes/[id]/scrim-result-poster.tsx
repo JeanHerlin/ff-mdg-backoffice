@@ -28,13 +28,28 @@ const MUTED = "#9BA6BC";
 const TABLE_TOP = 168;
 const TABLE_HEADER_H = 38;
 const ROW_H = 46;
-// Hauteur totale = zone titre/logo + tableau + marge basse (date) — même
-// rythme vertical pour les deux formats (paysage et portrait). Exportée pour
-// que l'aperçu réduit du panneau d'export calcule la même hauteur sans
-// dupliquer la formule.
+// Hauteur totale du format PORTRAIT (façon A4) = zone titre/logo + tableau +
+// marge basse (date) — celui-ci reste en hauteur variable, contrairement au
+// paysage (voir POSTER_HEIGHT_LANDSCAPE plus bas, format fixe 1920×1080).
+// Exportée pour que l'aperçu réduit du panneau d'export calcule la même
+// hauteur sans dupliquer la formule.
 export function posterHeight(rowCount: number) {
   return 240 + rowCount * ROW_H + 90;
 }
+
+// Le format paysage est un vrai 1920×1080 (16:9) fixe, pas une hauteur qui
+// grandit avec le nombre d'équipes — voir ScrimResultPoster, qui calcule une
+// hauteur de ligne adaptative (rowHeight, toujours ≤ ROW_H) pour que toutes
+// les équipes tiennent toujours dans ces 1080px, quel que soit leur nombre :
+// avec peu d'équipes les lignes gardent leur taille normale (ROW_H) et de
+// l'espace vide reste sous le tableau ; avec beaucoup d'équipes les lignes
+// (et leur contenu : avatar, police...) rétrécissent proportionnellement
+// plutôt que de déborder ou d'être coupées.
+export const POSTER_HEIGHT_LANDSCAPE = 1080;
+// Même marge basse que posterHeight() (le "+90" de sa formule) — reproduite
+// ici pour que le calcul de hauteur de ligne adaptative parte du même repère
+// visuel (espace réservé sous le tableau avant le bord de l'affiche).
+const LANDSCAPE_BOTTOM_MARGIN = 90;
 
 export interface PosterStandingEntry {
   name: string;
@@ -73,10 +88,10 @@ function initialsOf(label: string) {
   return label.trim().slice(0, 2).toUpperCase();
 }
 
-function TeamAvatar({ logoUrl, label }: { logoUrl: string | null; label: string }) {
+function TeamAvatar({ logoUrl, label, size = 34 }: { logoUrl: string | null; label: string; size?: number }) {
   if (logoUrl) {
     // eslint-disable-next-line @next/next/no-img-element -- capturé hors DOM Next.js normal (html-to-image)
-    return <img src={logoUrl} alt="" style={{ width: 34, height: 34, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />;
+    return <img src={logoUrl} alt="" style={{ width: size, height: size, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />;
   }
   return (
     <div
@@ -84,12 +99,12 @@ function TeamAvatar({ logoUrl, label }: { logoUrl: string | null; label: string 
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        width: 34,
-        height: 34,
+        width: size,
+        height: size,
         borderRadius: 8,
         background: "rgba(245,130,31,0.18)",
         color: ORANGE,
-        fontSize: 12,
+        fontSize: Math.max(9, Math.round(size * 0.35)),
         fontWeight: 800,
         flexShrink: 0,
       }}
@@ -146,6 +161,7 @@ function ResultTable({
   startRank,
   width,
   roundedLeft = true,
+  rowHeight = ROW_H,
 }: {
   entries: PosterStandingEntry[];
   startRank: number;
@@ -155,6 +171,12 @@ function ResultTable({
   // deux blocs se lisent comme un seul tableau continu, sans coin arrondi
   // "en trop" au milieu.
   roundedLeft?: boolean;
+  // Toujours ≤ ROW_H — réduite par ScrimResultPoster (format paysage fixe
+  // 1920×1080, voir POSTER_HEIGHT_LANDSCAPE) quand il y a trop d'équipes
+  // pour tenir à la taille normale des lignes. Avatar/police suivent
+  // proportionnellement (scale) pour ne jamais déborder de la ligne
+  // rétrécie.
+  rowHeight?: number;
 }) {
   const ratio = (width - PADDING * 2 - GAP * 6) / BASE_INNER;
   const RANK_W = Math.round(BASE_COLUMNS.RANK * ratio);
@@ -164,6 +186,14 @@ function ResultTable({
   const PLACE_W = Math.round(BASE_COLUMNS.PLACE * ratio);
   const BOOYAH_W = Math.round(BASE_COLUMNS.BOOYAH * ratio);
   const TOTAL_W = Math.round(BASE_COLUMNS.TOTAL * ratio);
+
+  const scale = Math.min(1, rowHeight / ROW_H);
+  const avatarSize = Math.round(34 * scale);
+  const statFontSize = Math.max(10, Math.round(14 * scale));
+  const nameFontSize = Math.max(11, Math.round(14 * scale));
+  const totalFontSize = Math.max(13, Math.round(18 * scale));
+  const rankBadgeSize = Math.max(18, Math.round(26 * scale));
+  const rankFontSize = Math.max(11, Math.round(14 * scale));
 
   return (
     <div
@@ -212,7 +242,7 @@ function ResultTable({
               display: "flex",
               alignItems: "center",
               background: champion ? CHAMPION_ROW_BG : ROW_BG,
-              height: ROW_H,
+              height: rowHeight,
               paddingLeft: PADDING,
               paddingRight: PADDING,
               gap: GAP,
@@ -225,10 +255,10 @@ function ResultTable({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  width: 26,
-                  height: 26,
+                  width: rankBadgeSize,
+                  height: rankBadgeSize,
                   borderRadius: 6,
-                  fontSize: 14,
+                  fontSize: rankFontSize,
                   fontWeight: 800,
                   color: rank === 1 ? NAVY : textColor,
                   background: rank === 1 ? GOLD : "transparent",
@@ -238,11 +268,11 @@ function ResultTable({
               </span>
             </div>
             <div style={{ width: TEAM_W, display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
-              <TeamAvatar logoUrl={entry.logoUrl} label={entry.tag ?? entry.name} />
+              <TeamAvatar logoUrl={entry.logoUrl} label={entry.tag ?? entry.name} size={avatarSize} />
               <span
                 style={{
                   color: textColor,
-                  fontSize: 14,
+                  fontSize: nameFontSize,
                   fontWeight: 800,
                   textTransform: "uppercase",
                   whiteSpace: "nowrap",
@@ -253,23 +283,23 @@ function ResultTable({
                 {entry.name}
               </span>
             </div>
-            <div style={{ width: PLAYED_W, textAlign: "center", color: mutedColor, fontSize: 14, fontWeight: 600 }}>{entry.matchesPlayed}</div>
-            <div style={{ width: KILLS_W, textAlign: "center", color: mutedColor, fontSize: 14, fontWeight: 600 }}>{entry.totalKills}</div>
-            <div style={{ width: PLACE_W, textAlign: "center", color: mutedColor, fontSize: 14, fontWeight: 600 }}>
+            <div style={{ width: PLAYED_W, textAlign: "center", color: mutedColor, fontSize: statFontSize, fontWeight: 600 }}>{entry.matchesPlayed}</div>
+            <div style={{ width: KILLS_W, textAlign: "center", color: mutedColor, fontSize: statFontSize, fontWeight: 600 }}>{entry.totalKills}</div>
+            <div style={{ width: PLACE_W, textAlign: "center", color: mutedColor, fontSize: statFontSize, fontWeight: 600 }}>
               {entry.totalPlacementPoints}
             </div>
             <div
               style={{
                 width: BOOYAH_W,
                 textAlign: "center",
-                fontSize: 14,
+                fontSize: statFontSize,
                 fontWeight: 700,
                 color: entry.booyahCount > 0 ? (champion ? CHAMPION_ROW_TEXT : GREEN) : mutedColor,
               }}
             >
               {entry.booyahCount > 0 ? entry.booyahCount : "—"}
             </div>
-            <div style={{ width: TOTAL_W, textAlign: "center", color: champion ? CHAMPION_ROW_TEXT : AMBER, fontSize: 18, fontWeight: 900 }}>
+            <div style={{ width: TOTAL_W, textAlign: "center", color: champion ? CHAMPION_ROW_TEXT : AMBER, fontSize: totalFontSize, fontWeight: 900 }}>
               {entry.totalPoints}
             </div>
           </div>
@@ -292,7 +322,12 @@ function ResultTable({
 const CHAMPION_COL_W = 40;
 const CHAMPION_COL_GAP = 0;
 
-function ChampionRushColumn({ entries }: { entries: PosterStandingEntry[] }) {
+function ChampionRushColumn({ entries, rowHeight = ROW_H }: { entries: PosterStandingEntry[]; rowHeight?: number }) {
+  // Même échelle que ResultTable (voir son commentaire sur rowHeight) — le
+  // badge couronne rétrécit avec la ligne pour ne jamais déborder.
+  const scale = Math.min(1, rowHeight / ROW_H);
+  const badgeSize = Math.max(18, Math.round(30 * scale));
+  const iconSize = Math.max(11, Math.round(18 * scale));
   return (
     <div style={{ width: CHAMPION_COL_W, display: "flex", flexDirection: "column" }}>
       {/* Toujours transparente, y compris pour la ligne championne — son
@@ -303,7 +338,7 @@ function ChampionRushColumn({ entries }: { entries: PosterStandingEntry[] }) {
         <div
           key={i}
           style={{
-            height: ROW_H,
+            height: rowHeight,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -312,8 +347,8 @@ function ChampionRushColumn({ entries }: { entries: PosterStandingEntry[] }) {
           {entry.championRushQualified && (
             <div
               style={{
-                width: 30,
-                height: 30,
+                width: badgeSize,
+                height: badgeSize,
                 borderRadius: 8,
                 background: GOLD,
                 border: `2px solid ${NAVY}`,
@@ -322,7 +357,7 @@ function ChampionRushColumn({ entries }: { entries: PosterStandingEntry[] }) {
                 justifyContent: "center",
               }}
             >
-              <Crown size={18} strokeWidth={2.5} color={NAVY} />
+              <Crown size={iconSize} strokeWidth={2.5} color={NAVY} />
             </div>
           )}
         </div>
@@ -409,12 +444,15 @@ function HostPhoto({ photoDataUrl, width, height }: { photoDataUrl: string; widt
   );
 }
 
-// Rendu à taille fixe (1600px de large) pour une capture PNG nette et
+// Rendu à taille fixe 1920×1080 (16:9) pour une capture PNG nette et
 // prévisible, quel que soit l'écran de l'admin qui exporte — le composant
 // n'est jamais affiché tel quel dans l'UI, seulement capturé (voir
 // offline-scrim-export-dialog.tsx qui l'affiche réduit via un transform
-// CSS purement visuel, sans jamais changer sa taille réelle).
-export const POSTER_WIDTH = 1600;
+// CSS purement visuel, sans jamais changer sa taille réelle). Contrairement
+// au portrait, la hauteur ne grandit jamais avec le nombre d'équipes : voir
+// rowH plus bas, qui rétrécit les lignes au besoin pour toujours tout faire
+// tenir dans ces 1080px.
+export const POSTER_WIDTH = 1920;
 const WIDTH = POSTER_WIDTH;
 const PHOTO_COLUMN_WIDTH = 260;
 
@@ -426,7 +464,14 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
   const left = standings.slice(0, half);
   const right = standings.slice(half);
   const rowCount = Math.max(left.length, right.length, 1);
-  const height = posterHeight(rowCount);
+  const height = POSTER_HEIGHT_LANDSCAPE;
+  // Hauteur de ligne adaptative : à taille normale (ROW_H) tant que ça tient
+  // dans le budget vertical fixe, rétrécie proportionnellement sinon — jamais
+  // de coupure, quel que soit le nombre d'équipes (voir POSTER_HEIGHT_LANDSCAPE
+  // et ResultTable/ChampionRushColumn, qui suivent avec avatar/police à
+  // l'échelle).
+  const availableRowsHeight = height - TABLE_TOP - LANDSCAPE_BOTTOM_MARGIN - TABLE_HEADER_H;
+  const rowH = Math.min(ROW_H, availableRowsHeight / rowCount);
   const crownExtra = showChampionRush ? CHAMPION_COL_W + CHAMPION_COL_GAP : 0;
   // Largeur du bloc tableau — TOUJOURS la même, avec ou sans photo (voir plus
   // bas) : seule sa POSITION change, jamais sa taille (sinon les colonnes des
@@ -470,19 +515,19 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
 
       <div style={{ position: "absolute", top: TABLE_TOP, left: tableLeft, right: tableRight, display: "flex", gap: 40 }}>
         <div style={{ display: "flex", gap: CHAMPION_COL_GAP, flex: 1 }}>
-          {showChampionRush && <ChampionRushColumn entries={left} />}
-          <ResultTable entries={left} startRank={1} width={tableWidth} roundedLeft={!showChampionRush} />
+          {showChampionRush && <ChampionRushColumn entries={left} rowHeight={rowH} />}
+          <ResultTable entries={left} startRank={1} width={tableWidth} roundedLeft={!showChampionRush} rowHeight={rowH} />
         </div>
         <div style={{ display: "flex", gap: CHAMPION_COL_GAP, flex: 1 }}>
-          {showChampionRush && <ChampionRushColumn entries={right} />}
-          <ResultTable entries={right} startRank={half + 1} width={tableWidth} roundedLeft={!showChampionRush} />
+          {showChampionRush && <ChampionRushColumn entries={right} rowHeight={rowH} />}
+          <ResultTable entries={right} startRank={half + 1} width={tableWidth} roundedLeft={!showChampionRush} rowHeight={rowH} />
         </div>
       </div>
 
       <div
         style={{
           position: "absolute",
-          top: TABLE_TOP + (TABLE_HEADER_H + rowCount * ROW_H) / 2 - 34,
+          top: TABLE_TOP + (TABLE_HEADER_H + rowCount * rowH) / 2 - 34,
           left: tableLeft + contentWidth / 2 - 34,
           width: 68,
           height: 68,

@@ -7,7 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Sheet } from "@/components/ui/sheet";
 import { apiRequest } from "@/lib/api-client";
-import { PosterStandingEntry, POSTER_WIDTH, POSTER_WIDTH_PORTRAIT, posterHeight, ScrimResultPoster, ScrimResultPosterPortrait } from "./scrim-result-poster";
+import {
+  PosterStandingEntry,
+  POSTER_WIDTH,
+  POSTER_WIDTH_PORTRAIT,
+  POSTER_HEIGHT_LANDSCAPE,
+  posterHeight,
+  ScrimResultPoster,
+  ScrimResultPosterPortrait,
+} from "./scrim-result-poster";
 
 const HOSTED_BY = "FF Madagascar E-Sport";
 const PREVIEW_WIDTH = 380;
@@ -133,7 +141,6 @@ export function OfflineScrimExportDialog({
 
   const landscapeScale = PREVIEW_WIDTH / POSTER_WIDTH;
   const portraitScale = PREVIEW_WIDTH / POSTER_WIDTH_PORTRAIT;
-  const landscapeRowCount = displayStandings ? Math.max(Math.ceil(displayStandings.length / 2), 1) : 1;
   const portraitRowCount = displayStandings ? Math.max(displayStandings.length, 1) : 1;
 
   return (
@@ -191,10 +198,10 @@ export function OfflineScrimExportDialog({
         ) : (
           <>
             <div className="flex flex-col gap-1.5">
-              <Label>Aperçu — paysage</Label>
+              <Label>Aperçu — paysage (1920×1080)</Label>
               <div
                 className="overflow-hidden rounded-md border border-border"
-                style={{ width: PREVIEW_WIDTH, height: posterHeight(landscapeRowCount) * landscapeScale }}
+                style={{ width: PREVIEW_WIDTH, height: POSTER_HEIGHT_LANDSCAPE * landscapeScale }}
               >
                 <div style={{ transform: `scale(${landscapeScale})`, transformOrigin: "top left" }}>
                   <ScrimResultPoster
