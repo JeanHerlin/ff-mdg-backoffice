@@ -628,12 +628,12 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
       <TitleBlock title={title} hostedBy={hostedBy} />
       {mapLabel && <MapLabel label={mapLabel} />}
       {championEntry && (
-        // Largeur d'UN SEUL tableau (colonne couronne + ResultTable), pas des
-        // deux combinés — un bandeau aussi large que les deux tableaux réunis
-        // paraissait disproportionné par rapport à chacun d'eux pris seul, on
-        // le centre donc à la même largeur qu'un tableau, entre les deux.
-        <div style={{ position: "absolute", top: TABLE_TOP, left: tableLeft + (containerWidth - (tableWidth + crownExtra)) / 2 }}>
-          <ChampionBanner entry={championEntry} width={tableWidth + crownExtra} />
+        // Au-dessus du PREMIER tableau (gauche) uniquement, jamais des deux —
+        // et calé exactement sur la largeur de son en-tête orange (tableWidth
+        // seul, sans la colonne couronne) : le bandeau ne doit jamais déborder
+        // vers la case couronne, juste s'aligner avec le tableau lui-même.
+        <div style={{ position: "absolute", top: TABLE_TOP, left: tableLeft + crownExtra }}>
+          <ChampionBanner entry={championEntry} width={tableWidth} />
         </div>
       )}
 
@@ -732,8 +732,11 @@ export const ScrimResultPosterPortrait = forwardRef<HTMLDivElement, ScrimResultP
       <TitleBlock title={title} hostedBy={hostedBy} />
       {mapLabel && <MapLabel label={mapLabel} />}
       {championEntry && (
-        <div style={{ position: "absolute", top: TABLE_TOP, left: tableLeft, width: contentWidth }}>
-          <ChampionBanner entry={championEntry} width={contentWidth} />
+        // Calé exactement sur la largeur de l'en-tête orange du tableau
+        // (tableWidth seul, sans la colonne couronne) — voir le même
+        // raisonnement dans ScrimResultPoster (paysage).
+        <div style={{ position: "absolute", top: TABLE_TOP, left: tableLeft + crownExtra }}>
+          <ChampionBanner entry={championEntry} width={tableWidth} />
         </div>
       )}
 
