@@ -473,17 +473,29 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
   const availableRowsHeight = height - TABLE_TOP - LANDSCAPE_BOTTOM_MARGIN - TABLE_HEADER_H;
   const rowH = Math.min(ROW_H, availableRowsHeight / rowCount);
   const crownExtra = showChampionRush ? CHAMPION_COL_W + CHAMPION_COL_GAP : 0;
-  // Largeur du bloc tableau — TOUJOURS la même, avec ou sans photo (voir plus
-  // bas) : seule sa POSITION change, jamais sa taille (sinon les colonnes des
-  // deux ResultTable se recalculeraient et ne correspondraient plus au
-  // classement rendu).
-  const contentWidth = WIDTH - 40 - PHOTO_COLUMN_WIDTH - 40;
-  const tableWidth = contentWidth / 2 - crownExtra;
+  // Largeur entre les deux tableaux (le "gap" du conteneur flex ci-dessous,
+  // voir JSX) — TOUJOURS la même valeur, avec ou sans photo, pour que le
+  // conteneur ait exactement la même largeur totale dans les deux cas (sinon
+  // les deux ResultTable se retrouveraient comprimées par flexbox et leurs
+  // colonnes, calculées en JS à partir de tableWidth, ne correspondraient
+  // plus à leur boîte réellement rendue).
+  const SIDE_GAP = 40;
+  // Largeur totale du conteneur (les deux tableaux + colonnes couronne + le
+  // SIDE_GAP entre eux) — celle du cas "avec photo", prise comme référence.
+  const containerWidth = WIDTH - PHOTO_COLUMN_WIDTH - 40;
+  const tableWidth = (containerWidth - SIDE_GAP) / 2 - crownExtra;
   // Avec photo : ancrée à gauche de la colonne réservée à la photo, comme
   // avant. Sans photo : recentrée dans toute la largeur de l'affiche (marges
-  // gauche/droite égales) au lieu de laisser un grand vide à gauche.
-  const tableLeft = photoDataUrl ? PHOTO_COLUMN_WIDTH : (WIDTH - contentWidth) / 2;
-  const tableRight = photoDataUrl ? 40 : (WIDTH - contentWidth) / 2;
+  // gauche/droite égales, même containerWidth qu'avec photo) au lieu de
+  // laisser un grand vide à gauche.
+  const tableLeft = photoDataUrl ? PHOTO_COLUMN_WIDTH : (WIDTH - containerWidth) / 2;
+  const tableRight = photoDataUrl ? 40 : (WIDTH - containerWidth) / 2;
+  // Centre horizontal du logo central : le milieu entre le bord droit du
+  // tableau gauche et le bord gauche du tableau droit — PAS le milieu du
+  // conteneur flex, qui se décale dès qu'une colonne couronne (crownExtra)
+  // s'ajoute juste avant le tableau droit (elle "pousse" ce tableau vers la
+  // droite sans bouger le tableau gauche, voir le layout plus bas).
+  const logoCenterX = tableLeft + (containerWidth + crownExtra) / 2;
 
   return (
     <div
@@ -513,7 +525,7 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
       <TitleBlock title={title} hostedBy={hostedBy} />
       {mapLabel && <MapLabel label={mapLabel} />}
 
-      <div style={{ position: "absolute", top: TABLE_TOP, left: tableLeft, right: tableRight, display: "flex", gap: 40 }}>
+      <div style={{ position: "absolute", top: TABLE_TOP, left: tableLeft, right: tableRight, display: "flex", gap: SIDE_GAP }}>
         <div style={{ display: "flex", gap: CHAMPION_COL_GAP, flex: 1 }}>
           {showChampionRush && <ChampionRushColumn entries={left} rowHeight={rowH} />}
           <ResultTable entries={left} startRank={1} width={tableWidth} roundedLeft={!showChampionRush} rowHeight={rowH} />
@@ -528,7 +540,7 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
         style={{
           position: "absolute",
           top: TABLE_TOP + (TABLE_HEADER_H + rowCount * rowH) / 2 - 34,
-          left: tableLeft + contentWidth / 2 - 34,
+          left: logoCenterX - 34,
           width: 68,
           height: 68,
           borderRadius: "50%",
