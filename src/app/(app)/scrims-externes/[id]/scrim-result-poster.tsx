@@ -285,19 +285,19 @@ function ResultTable({
 // aux largeurs/colonnes actuelles : le tableau existant reste rigoureusement
 // inchangé, cette colonne vient juste s'accoler à gauche (voir
 // ScrimResultPoster, qui réduit d'autant la largeur donnée au tableau pour
-// garder le même encombrement global). Entièrement transparente sauf : la
-// case d'une équipe qualifiée (icône couronne) et la ligne championne (fond
-// plein, même couleur que sa ligne dans le tableau) — jamais de case pleine
-// pour une équipe qui n'a ni l'un ni l'autre.
+// garder le même encombrement global). Entièrement transparente, y compris
+// pour la ligne championne — son fond plein reste dans le tableau (voir
+// ResultTable), ne déborde jamais ici : seule l'icône couronne d'une équipe
+// qualifiée s'y affiche.
 const CHAMPION_COL_W = 40;
 const CHAMPION_COL_GAP = 0;
 
 function ChampionRushColumn({ entries }: { entries: PosterStandingEntry[] }) {
   return (
     <div style={{ width: CHAMPION_COL_W, display: "flex", flexDirection: "column" }}>
-      {/* En-tête transparente, comme les cases sans couronne ci-dessous —
-          seule la ligne championne (fond plein) et les cases qualifiées
-          (icône) affichent quelque chose ici. */}
+      {/* Toujours transparente, y compris pour la ligne championne — son
+          fond plein (CHAMPION_ROW_BG) reste dans le tableau, ne déborde
+          jamais dans cette case, seule l'icône couronne s'y affiche. */}
       <div style={{ height: TABLE_HEADER_H }} />
       {entries.map((entry, i) => (
         <div
@@ -307,7 +307,6 @@ function ChampionRushColumn({ entries }: { entries: PosterStandingEntry[] }) {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            background: entry.isChampion ? CHAMPION_ROW_BG : "transparent",
           }}
         >
           {entry.championRushQualified && (
@@ -317,8 +316,6 @@ function ChampionRushColumn({ entries }: { entries: PosterStandingEntry[] }) {
                 height: 30,
                 borderRadius: 8,
                 background: GOLD,
-                // Anneau marine — sans lui, le carré or se fond dans une ligne
-                // championne (même fond or plein), voir CHAMPION_ROW_BG.
                 border: `2px solid ${NAVY}`,
                 display: "flex",
                 alignItems: "center",
