@@ -12,6 +12,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TabList, TabButton } from "@/components/ui/tabs";
 import { apiRequest, ApiError } from "@/lib/api-client";
 import { OfflineScrimExportDialog } from "./offline-scrim-export-dialog";
+import { PosterStandingEntry } from "./scrim-result-poster";
 
 const MAX_PLAYERS_PER_TEAM = 4;
 
@@ -139,16 +140,43 @@ function GlobalStandingsTable({ standings }: { standings: StandingEntry[] }) {
   );
 }
 
+// Classement d'UNE map, dérivé des lignes déjà assignées de ce match — jamais
+// le placement brut mais le total de points (comme l'export global), trié
+// décroissant ; matchesPlayed=1 puisque ce n'est que ce match-là. Le mode
+// Champion Rush ne s'applique jamais ici (le seuil porte sur le cumul de tout
+// le scrim, pas sur une seule map) : championRushQualified/isChampion restent
+// undefined, voir offline-scrim-export-dialog (showToggle désactivé si
+// standingsOverride est fourni).
+function buildMapStandings(match: Match): PosterStandingEntry[] {
+  return match.teamResults
+    .filter((tr): tr is TeamResult & { offlineScrimTeam: OfflineTeamOption } => !!tr.offlineScrimTeam)
+    .map((tr) => ({
+      name: tr.offlineScrimTeam.name,
+      tag: tr.offlineScrimTeam.tag,
+      logoUrl: tr.offlineScrimTeam.logoUrl,
+      matchesPlayed: 1,
+      totalKills: tr.totalKills,
+      totalPlacementPoints: tr.placementPoints,
+      booyahCount: tr.placement === 1 ? 1 : 0,
+      totalPoints: tr.points,
+    }))
+    .sort((a, b) => b.totalPoints - a.totalPoints);
+}
+
 export function OfflineScrimResultsSection({
   scrimId,
   teams,
   scrimName,
   scrimStartAt,
+  isChampionRush,
+  championRushThreshold,
 }: {
   scrimId: string;
   teams: OfflineTeamOption[];
   scrimName: string;
   scrimStartAt: string;
+  isChampionRush?: boolean;
+  championRushThreshold?: number | null;
 }) {
   const [matches, setMatches] = useState<Match[]>([]);
   const [standings, setStandings] = useState<StandingEntry[]>([]);
@@ -156,6 +184,7 @@ export function OfflineScrimResultsSection({
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [exportOverride, setExportOverride] = useState<{ standings: PosterStandingEntry[]; mapLabel: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Match | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -232,7 +261,15 @@ export function OfflineScrimResultsSection({
         <div className="flex flex-row items-center justify-between">
           <CardTitle>Résultats de matchs</CardTitle>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => setExportOpen(true)} disabled={standings.length === 0}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setExportOverride(null);
+                setExportOpen(true);
+              }}
+              disabled={standings.length === 0}
+            >
               <ImageDown className="size-4" />
               Exporter en image
             </Button>
@@ -288,6 +325,10 @@ export function OfflineScrimResultsSection({
               loadStandings();
             }}
             onDelete={() => setDeleteTarget(activeMatch)}
+            onExportMap={() => {
+              setExportOverride({ standings: buildMapStandings(activeMatch), mapLabel: MAP_LABEL[activeMatch.map] });
+              setExportOpen(true);
+            }}
           />
         ) : matches.length === 0 ? (
           <p className="text-sm text-muted-foreground">Aucun résultat de match enregistré.</p>
@@ -296,10 +337,17 @@ export function OfflineScrimResultsSection({
 
       <OfflineScrimExportDialog
         open={exportOpen}
-        onClose={() => setExportOpen(false)}
+        onClose={() => {
+          setExportOpen(false);
+          setExportOverride(null);
+        }}
         scrimId={scrimId}
         scrimName={scrimName}
         scrimStartAt={scrimStartAt}
+        isChampionRush={isChampionRush}
+        championRushThreshold={championRushThreshold}
+        standingsOverride={exportOverride?.standings}
+        mapLabel={exportOverride?.mapLabel}
       />
 
       <Sheet open={addOpen} onClose={() => setAddOpen(false)} title="Ajouter un résultat de match">
@@ -509,6 +557,7 @@ function MatchCard({
   onResultsChanged,
   onPatchMatch,
   onDelete,
+  onExportMap,
 }: {
   match: Match;
   teams: OfflineTeamOption[];
@@ -519,9 +568,11 @@ function MatchCard({
   onResultsChanged: () => void;
   onPatchMatch: (patch: Partial<Match>) => void;
   onDelete: () => void;
+  onExportMap: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
   const hasUnassigned = match.teamResults.some((tr) => !tr.offlineScrimTeamId);
+  const hasAssigned = match.teamResults.some((tr) => tr.offlineScrimTeamId);
   // Un ocrError distingue un vrai échec technique (API indisponible/quota
   // dépassé...) d'une image simplement non reconnue comme écran Free Fire —
   // les confondre sous le même message a fait chercher un bug de détection
@@ -606,6 +657,10 @@ function MatchCard({
           {match.confirmedAt && <p className="text-xs text-primary">Résultat confirmé — compte dans le classement.</p>}
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={onExportMap} disabled={!hasAssigned}>
+            <ImageDown className="size-4" />
+            Exporter cette map
+          </Button>
           <Button variant="outline" size="sm" onClick={onDelete}>
             <Trash2 className="size-4" />
             Supprimer ce match

@@ -43,25 +43,47 @@ export function OfflineScrimExportDialog({
   scrimId,
   scrimName,
   scrimStartAt,
+  isChampionRush,
+  championRushThreshold,
+  standingsOverride,
+  mapLabel,
 }: {
   open: boolean;
   onClose: () => void;
   scrimId: string;
   scrimName: string;
   scrimStartAt: string;
+  // Mode Champion Rush — uniquement pertinent pour l'export global (une map
+  // seule n'a pas de sens vis-à-vis d'un seuil cumulé sur tout le scrim), ce
+  // pourquoi le toggle ci-dessous ne s'affiche jamais si standingsOverride
+  // est fourni.
+  isChampionRush?: boolean;
+  championRushThreshold?: number | null;
+  // Fourni par l'export "par map" (voir offline-scrim-results-section) : le
+  // classement de CE match uniquement, déjà trié par points — dans ce cas on
+  // saute l'appel réseau et on affiche juste ces données avec l'étiquette
+  // "MAP: ...".
+  standingsOverride?: PosterStandingEntry[];
+  mapLabel?: string;
 }) {
   const [standings, setStandings] = useState<PosterStandingEntry[] | null>(null);
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
   const [generating, setGenerating] = useState<"landscape" | "portrait" | null>(null);
+  const [championRushOn, setChampionRushOn] = useState(false);
   const posterRef = useRef<HTMLDivElement>(null);
   const posterPortraitRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
+    setChampionRushOn(false);
+    if (standingsOverride) {
+      setStandings(standingsOverride);
+      return;
+    }
     setStandings(null);
     apiRequest<PosterStandingEntry[]>(`/offline-scrim-matches/scrims/${scrimId}/standings`).then((data) => setStandings(data ?? []));
-  }, [open, scrimId]);
+  }, [open, scrimId, standingsOverride]);
 
   useEffect(() => {
     if (!photo) {
@@ -74,7 +96,20 @@ export function OfflineScrimExportDialog({
   }, [photo]);
 
   const dateLabel = useMemo(() => formatDateLabel(scrimStartAt), [scrimStartAt]);
-  const slug = slugify(scrimName);
+  const slug = slugify(scrimName) + (mapLabel ? `-${slugify(mapLabel)}` : "");
+
+  // Le toggle Champion Rush n'a de sens que sur l'export global (seuil
+  // cumulé sur tout le scrim) — jamais proposé pour un export par map.
+  const showToggle = !standingsOverride && !!isChampionRush;
+
+  const displayStandings = useMemo(() => {
+    if (!standings) return null;
+    if (!showToggle || !championRushOn || championRushThreshold == null) return standings;
+    return standings.map((entry) => {
+      const qualified = entry.totalPoints >= championRushThreshold;
+      return { ...entry, championRushQualified: qualified, isChampion: qualified && entry.booyahCount > 0 };
+    });
+  }, [standings, showToggle, championRushOn, championRushThreshold]);
 
   async function download(kind: "landscape" | "portrait") {
     const node = kind === "landscape" ? posterRef.current : posterPortraitRef.current;
@@ -89,8 +124,8 @@ export function OfflineScrimExportDialog({
 
   const landscapeScale = PREVIEW_WIDTH / POSTER_WIDTH;
   const portraitScale = PREVIEW_WIDTH / POSTER_WIDTH_PORTRAIT;
-  const landscapeRowCount = standings ? Math.max(Math.ceil(standings.length / 2), 1) : 1;
-  const portraitRowCount = standings ? Math.max(standings.length, 1) : 1;
+  const landscapeRowCount = displayStandings ? Math.max(Math.ceil(displayStandings.length / 2), 1) : 1;
+  const portraitRowCount = displayStandings ? Math.max(displayStandings.length, 1) : 1;
 
   return (
     <Sheet open={open} onClose={onClose} title="Exporter le résultat en image">
@@ -126,11 +161,23 @@ export function OfflineScrimExportDialog({
           <p className="text-xs text-muted-foreground">Jamais envoyée ni sauvegardée — utilisée uniquement pour cette image.</p>
         </div>
 
-        {!standings ? (
+        {showToggle && (
+          <label className="flex w-fit items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={championRushOn}
+              onChange={(e) => setChampionRushOn(e.target.checked)}
+              className="size-4 rounded border-border accent-primary"
+            />
+            Afficher Champion Rush (équipes ayant atteint {championRushThreshold} pts)
+          </label>
+        )}
+
+        {!displayStandings ? (
           <div className="flex h-40 items-center justify-center">
             <Loader2 className="size-5 animate-spin text-muted-foreground" />
           </div>
-        ) : standings.length === 0 ? (
+        ) : displayStandings.length === 0 ? (
           <p className="text-sm text-muted-foreground">Aucune équipe assignée à un résultat pour le moment — rien à exporter.</p>
         ) : (
           <>
@@ -146,9 +193,11 @@ export function OfflineScrimExportDialog({
                     title={scrimName}
                     hostedBy={HOSTED_BY}
                     dateLabel={dateLabel}
-                    standings={standings}
+                    standings={displayStandings}
                     photoDataUrl={photoDataUrl}
                     logoSrc="/brand/logo-light-bg.png"
+                    showChampionRush={championRushOn}
+                    mapLabel={mapLabel}
                   />
                 </div>
               </div>
@@ -170,9 +219,11 @@ export function OfflineScrimExportDialog({
                     title={scrimName}
                     hostedBy={HOSTED_BY}
                     dateLabel={dateLabel}
-                    standings={standings}
+                    standings={displayStandings}
                     photoDataUrl={photoDataUrl}
                     logoSrc="/brand/logo-light-bg.png"
+                    showChampionRush={championRushOn}
+                    mapLabel={mapLabel}
                   />
                 </div>
               </div>

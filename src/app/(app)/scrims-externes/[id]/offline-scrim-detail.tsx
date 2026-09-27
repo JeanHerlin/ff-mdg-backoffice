@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ImagePlus, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ImagePlus, Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,8 +24,16 @@ interface OfflineScrimData {
   id: string;
   name: string;
   startAt: string;
+  isChampionRush: boolean;
+  championRushThreshold: number | null;
   teams: OfflineScrimTeam[];
   _count: { matches: number };
+}
+
+interface TeamSearchResult {
+  name: string;
+  tag: string | null;
+  logoUrl: string | null;
 }
 
 function TeamLogo({ url, label }: { url: string | null; label: string }) {
@@ -180,7 +188,14 @@ export function OfflineScrimDetail() {
         </CardContent>
       </Card>
 
-      <OfflineScrimResultsSection scrimId={scrim.id} teams={scrim.teams} scrimName={scrim.name} scrimStartAt={scrim.startAt} />
+      <OfflineScrimResultsSection
+        scrimId={scrim.id}
+        teams={scrim.teams}
+        scrimName={scrim.name}
+        scrimStartAt={scrim.startAt}
+        isChampionRush={scrim.isChampionRush}
+        championRushThreshold={scrim.championRushThreshold}
+      />
 
       <Sheet open={editOpen} onClose={() => setEditOpen(false)} title="Modifier le scrim">
         <EditScrimForm
@@ -240,17 +255,30 @@ export function OfflineScrimDetail() {
 function EditScrimForm({ scrim, onSaved }: { scrim: OfflineScrimData; onSaved: () => void }) {
   const [name, setName] = useState(scrim.name);
   const [startAt, setStartAt] = useState(scrim.startAt.slice(0, 16));
+  const [isChampionRush, setIsChampionRush] = useState(scrim.isChampionRush);
+  const [championRushThreshold, setChampionRushThreshold] = useState(
+    scrim.championRushThreshold != null ? String(scrim.championRushThreshold) : ""
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (isChampionRush && !championRushThreshold.trim()) {
+      setError("Indiquez le nombre de points à atteindre pour le Champion Rush.");
+      return;
+    }
     setSaving(true);
     try {
       await apiRequest(`/offline-scrims/${scrim.id}`, {
         method: "PATCH",
-        body: { name: name.trim(), startAt: new Date(startAt).toISOString() },
+        body: {
+          name: name.trim(),
+          startAt: new Date(startAt).toISOString(),
+          isChampionRush,
+          ...(isChampionRush ? { championRushThreshold: Number(championRushThreshold) } : {}),
+        },
       });
       onSaved();
     } catch {
@@ -270,12 +298,123 @@ function EditScrimForm({ scrim, onSaved }: { scrim: OfflineScrimData; onSaved: (
         <Label htmlFor="edit-offline-scrim-start">Date de début</Label>
         <DateTimePicker id="edit-offline-scrim-start" value={startAt} onChange={setStartAt} />
       </div>
+      <div className="flex flex-col gap-2">
+        <label className="flex items-center gap-2 text-sm text-foreground">
+          <input
+            type="checkbox"
+            checked={isChampionRush}
+            onChange={(e) => setIsChampionRush(e.target.checked)}
+            className="size-4 rounded border-border accent-primary"
+          />
+          Mode Champion Rush
+        </label>
+        {isChampionRush && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-offline-scrim-threshold">Points à atteindre</Label>
+            <Input
+              id="edit-offline-scrim-threshold"
+              type="number"
+              min={1}
+              max={999}
+              value={championRushThreshold}
+              onChange={(e) => setChampionRushThreshold(e.target.value)}
+              required
+            />
+          </div>
+        )}
+      </div>
       {error && <p className="text-sm text-accent">{error}</p>}
       <Button type="submit" disabled={saving}>
         {saving && <Loader2 className="size-4 animate-spin" />}
         Enregistrer
       </Button>
     </form>
+  );
+}
+
+// Recherche parmi les équipes déjà saisies dans N'IMPORTE QUEL scrim externe
+// — pure convenance UX à l'ajout, pour éviter de ressaisir nom/tag/logo d'une
+// équipe déjà rencontrée. Le formulaire manuel (nom/tag/logo + édition en
+// place) reste entièrement inchangé, cette recherche vient juste le
+// pré-remplir en un clic.
+function TeamSearchField({ onSelect }: { onSelect: (result: TeamSearchResult) => void }) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<TeamSearchResult[]>([]);
+  const [open, setOpen] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [open]);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) {
+      setResults([]);
+      return;
+    }
+    setSearching(true);
+    const timeout = setTimeout(() => {
+      apiRequest<TeamSearchResult[]>(`/offline-scrims/teams/search?q=${encodeURIComponent(q)}`)
+        .then((data) => setResults(data ?? []))
+        .finally(() => setSearching(false));
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [query]);
+
+  return (
+    <div ref={ref} className="relative flex flex-col gap-1.5">
+      <Label htmlFor="offline-team-search">Réutiliser une équipe déjà saisie (facultatif)</Label>
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          id="offline-team-search"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          placeholder="Rechercher par nom..."
+          className="pl-9"
+        />
+      </div>
+      {open && query.trim() && (
+        <div className="absolute top-full z-50 mt-1 max-h-56 w-full overflow-auto rounded-md border border-border bg-card py-1 shadow-lg">
+          {searching ? (
+            <div className="flex items-center justify-center py-3">
+              <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : results.length === 0 ? (
+            <p className="px-3 py-2 text-sm text-muted-foreground">Aucune équipe trouvée.</p>
+          ) : (
+            results.map((r) => (
+              <button
+                key={r.name}
+                type="button"
+                onClick={() => {
+                  onSelect(r);
+                  setQuery("");
+                  setResults([]);
+                  setOpen(false);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
+              >
+                <TeamLogo url={r.logoUrl} label={r.tag ?? r.name} />
+                <span className="font-medium text-foreground">{r.name}</span>
+                {r.tag && <span className="text-muted-foreground">[{r.tag}]</span>}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -288,12 +427,17 @@ function TeamForm({ scrimId, team, onSaved }: { scrimId: string; team: OfflineSc
   // nouveau choix de fichier tant qu'on n'a pas soumis, pour ne jamais
   // renvoyer removeLogo si un fichier a finalement été choisi entre-temps.
   const [removeLogo, setRemoveLogo] = useState(false);
+  // Logo d'une équipe réutilisée via la recherche — une URL Cloudinary déjà
+  // existante, jamais un fichier à envoyer : voir handleSubmit, elle n'est
+  // envoyée que si aucun nouveau fichier n'a été choisi entre-temps.
+  const [reusedLogoUrl, setReusedLogoUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function handleLogoChange(file: File | null) {
     setLogo(file);
     setRemoveLogo(false);
+    setReusedLogoUrl(null);
     setLogoPreview(file ? URL.createObjectURL(file) : (team?.logoUrl ?? null));
   }
 
@@ -301,6 +445,16 @@ function TeamForm({ scrimId, team, onSaved }: { scrimId: string; team: OfflineSc
     setLogo(null);
     setLogoPreview(null);
     setRemoveLogo(true);
+    setReusedLogoUrl(null);
+  }
+
+  function handleSelectSearchResult(result: TeamSearchResult) {
+    setName(result.name);
+    setTag(result.tag ?? "");
+    setLogo(null);
+    setRemoveLogo(false);
+    setReusedLogoUrl(result.logoUrl);
+    setLogoPreview(result.logoUrl);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -313,6 +467,7 @@ function TeamForm({ scrimId, team, onSaved }: { scrimId: string; team: OfflineSc
       if (tag.trim()) formData.set("tag", tag.trim());
       if (logo) formData.set("logo", logo);
       else if (removeLogo) formData.set("removeLogo", "true");
+      else if (reusedLogoUrl) formData.set("logoUrl", reusedLogoUrl);
       if (team) {
         await apiRequest(`/offline-scrims/${scrimId}/teams/${team.id}`, { method: "PATCH", body: formData });
       } else {
@@ -332,6 +487,7 @@ function TeamForm({ scrimId, team, onSaved }: { scrimId: string; team: OfflineSc
 
   return (
     <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+      {!team && <TeamSearchField onSelect={handleSelectSearchResult} />}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="offline-team-name">Nom de l&apos;équipe</Label>
         <Input id="offline-team-name" value={name} onChange={(e) => setName(e.target.value)} required minLength={1} maxLength={60} />

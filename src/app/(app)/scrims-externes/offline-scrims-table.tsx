@@ -114,6 +114,8 @@ export function OfflineScrimsTable() {
 function CreateOfflineScrimForm({ onCreated }: { onCreated: (id: string) => void }) {
   const [name, setName] = useState("");
   const [startAt, setStartAt] = useState("");
+  const [isChampionRush, setIsChampionRush] = useState(false);
+  const [championRushThreshold, setChampionRushThreshold] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -124,11 +126,20 @@ function CreateOfflineScrimForm({ onCreated }: { onCreated: (id: string) => void
       setError("Choisissez une date et une heure de début.");
       return;
     }
+    if (isChampionRush && !championRushThreshold.trim()) {
+      setError("Indiquez le nombre de points à atteindre pour le Champion Rush.");
+      return;
+    }
     setSaving(true);
     try {
       const data = await apiRequest<{ scrim: { id: string } }>("/offline-scrims", {
         method: "POST",
-        body: { name: name.trim(), startAt: new Date(startAt).toISOString() },
+        body: {
+          name: name.trim(),
+          startAt: new Date(startAt).toISOString(),
+          isChampionRush,
+          ...(isChampionRush ? { championRushThreshold: Number(championRushThreshold) } : {}),
+        },
       });
       if (data?.scrim) onCreated(data.scrim.id);
     } catch (err) {
@@ -147,6 +158,31 @@ function CreateOfflineScrimForm({ onCreated }: { onCreated: (id: string) => void
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="offline-scrim-start">Date de début</Label>
         <DateTimePicker id="offline-scrim-start" value={startAt} onChange={setStartAt} />
+      </div>
+      <div className="flex flex-col gap-2">
+        <label className="flex items-center gap-2 text-sm text-foreground">
+          <input
+            type="checkbox"
+            checked={isChampionRush}
+            onChange={(e) => setIsChampionRush(e.target.checked)}
+            className="size-4 rounded border-border accent-primary"
+          />
+          Mode Champion Rush
+        </label>
+        {isChampionRush && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="offline-scrim-threshold">Points à atteindre</Label>
+            <Input
+              id="offline-scrim-threshold"
+              type="number"
+              min={1}
+              max={999}
+              value={championRushThreshold}
+              onChange={(e) => setChampionRushThreshold(e.target.value)}
+              required
+            />
+          </div>
+        )}
       </div>
       {error && <p className="text-sm text-accent">{error}</p>}
       <Button type="submit" disabled={saving}>

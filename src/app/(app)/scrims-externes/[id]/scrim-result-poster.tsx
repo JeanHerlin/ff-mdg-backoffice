@@ -12,6 +12,10 @@ const NAVY = "#1B2438";
 // deux composants plus bas), elle reste devinable derrière sans jamais nuire
 // à la lisibilité du texte (blanc, fortement contrasté même à 90% d'opacité).
 const ROW_BG = "rgba(20,28,46,0.92)";
+// Ligne d'une équipe championne (Booyah + seuil Champion Rush atteint) —
+// même teinte or que la colonne couronne, pour la repérer d'un coup d'œil
+// sans jamais se confondre avec le fond des autres lignes.
+const CHAMPION_ROW_BG = "rgba(245,196,66,0.35)";
 const GOLD = "#F5C842";
 const AMBER = "#FDBA47";
 const GREEN = "#3ADC7A";
@@ -37,6 +41,11 @@ export interface PosterStandingEntry {
   totalPlacementPoints: number;
   booyahCount: number;
   totalPoints: number;
+  // Calculés côté appelant (voir offline-scrim-export-dialog) à partir du
+  // seuil du scrim — le composant n'a besoin de connaître que ces deux
+  // booléens, jamais le seuil lui-même.
+  championRushQualified?: boolean;
+  isChampion?: boolean;
 }
 
 export interface ScrimResultPosterProps {
@@ -46,6 +55,14 @@ export interface ScrimResultPosterProps {
   standings: PosterStandingEntry[];
   photoDataUrl: string | null;
   logoSrc: string;
+  // Colonne couronne sans en-tête, ajoutée devant le tableau (voir
+  // ChampionRushColumn) — jamais affichée si le scrim n'est pas en mode
+  // Champion Rush ou si l'admin a désactivé le bouton dans le panneau
+  // d'export.
+  showChampionRush?: boolean;
+  // Étiquette "MAP: ..." en haut à droite — uniquement pour un export par
+  // map (voir offline-scrim-results-section), absente de l'export global.
+  mapLabel?: string;
 }
 
 function initialsOf(label: string) {
@@ -160,7 +177,7 @@ function ResultTable({ entries, startRank, width }: { entries: PosterStandingEnt
             style={{
               display: "flex",
               alignItems: "center",
-              background: ROW_BG,
+              background: entry.isChampion ? CHAMPION_ROW_BG : ROW_BG,
               height: ROW_H,
               paddingLeft: PADDING,
               paddingRight: PADDING,
@@ -216,6 +233,58 @@ function ResultTable({ entries, startRank, width }: { entries: PosterStandingEnt
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// Colonne dédiée sans en-tête, toujours devant le tableau — jamais à
+// l'intérieur de ResultTable, pour ne jamais toucher aux largeurs/colonnes
+// actuelles : le tableau existant reste rigoureusement inchangé, cette
+// colonne vient juste s'ajouter à côté (voir ScrimResultPoster, qui réduit
+// d'autant la largeur donnée au tableau pour garder le même encombrement
+// global).
+const CHAMPION_COL_W = 30;
+const CHAMPION_COL_GAP = 8;
+
+function ChampionRushColumn({ entries }: { entries: PosterStandingEntry[] }) {
+  return (
+    <div style={{ width: CHAMPION_COL_W, display: "flex", flexDirection: "column" }}>
+      <div style={{ height: TABLE_HEADER_H }} />
+      {entries.map((entry, i) => (
+        <div
+          key={i}
+          style={{
+            height: ROW_H,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {entry.championRushQualified && (
+            <div
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: "50%",
+                background: GOLD,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Crown size={13} strokeWidth={2.5} color={NAVY} />
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MapLabel({ label }: { label: string }) {
+  return (
+    <div style={{ position: "absolute", top: 40, right: 40, color: NAVY, fontSize: 13, fontWeight: 800, letterSpacing: 0.3 }}>
+      MAP: {label}
     </div>
   );
 }
@@ -298,7 +367,7 @@ const WIDTH = POSTER_WIDTH;
 const PHOTO_COLUMN_WIDTH = 260;
 
 export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterProps>(function ScrimResultPoster(
-  { title, hostedBy, dateLabel, standings, photoDataUrl, logoSrc },
+  { title, hostedBy, dateLabel, standings, photoDataUrl, logoSrc, showChampionRush, mapLabel },
   ref
 ) {
   const half = Math.ceil(standings.length / 2);
@@ -306,7 +375,8 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
   const right = standings.slice(half);
   const rowCount = Math.max(left.length, right.length, 1);
   const height = posterHeight(rowCount);
-  const tableWidth = (WIDTH - 40 - PHOTO_COLUMN_WIDTH - 40) / 2;
+  const crownExtra = showChampionRush ? CHAMPION_COL_W + CHAMPION_COL_GAP : 0;
+  const tableWidth = (WIDTH - 40 - PHOTO_COLUMN_WIDTH - 40) / 2 - crownExtra;
 
   return (
     <div
@@ -334,10 +404,17 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
       />
 
       <TitleBlock title={title} hostedBy={hostedBy} />
+      {mapLabel && <MapLabel label={mapLabel} />}
 
       <div style={{ position: "absolute", top: TABLE_TOP, left: PHOTO_COLUMN_WIDTH, right: 40, display: "flex", gap: 40 }}>
-        <ResultTable entries={left} startRank={1} width={tableWidth} />
-        <ResultTable entries={right} startRank={half + 1} width={tableWidth} />
+        <div style={{ display: "flex", gap: CHAMPION_COL_GAP, flex: 1 }}>
+          {showChampionRush && <ChampionRushColumn entries={left} />}
+          <ResultTable entries={left} startRank={1} width={tableWidth} />
+        </div>
+        <div style={{ display: "flex", gap: CHAMPION_COL_GAP, flex: 1 }}>
+          {showChampionRush && <ChampionRushColumn entries={right} />}
+          <ResultTable entries={right} startRank={half + 1} width={tableWidth} />
+        </div>
       </div>
 
       <div
@@ -376,12 +453,13 @@ const WIDTH_PORTRAIT = POSTER_WIDTH_PORTRAIT;
 const PHOTO_COLUMN_WIDTH_PORTRAIT = 220;
 
 export const ScrimResultPosterPortrait = forwardRef<HTMLDivElement, ScrimResultPosterProps>(function ScrimResultPosterPortrait(
-  { title, hostedBy, dateLabel, standings, photoDataUrl, logoSrc },
+  { title, hostedBy, dateLabel, standings, photoDataUrl, logoSrc, showChampionRush, mapLabel },
   ref
 ) {
   const rowCount = Math.max(standings.length, 1);
   const height = posterHeight(rowCount);
-  const tableWidth = WIDTH_PORTRAIT - 40 - PHOTO_COLUMN_WIDTH_PORTRAIT;
+  const crownExtra = showChampionRush ? CHAMPION_COL_W + CHAMPION_COL_GAP : 0;
+  const tableWidth = WIDTH_PORTRAIT - 40 - PHOTO_COLUMN_WIDTH_PORTRAIT - crownExtra;
 
   return (
     <div
@@ -409,8 +487,10 @@ export const ScrimResultPosterPortrait = forwardRef<HTMLDivElement, ScrimResultP
       />
 
       <TitleBlock title={title} hostedBy={hostedBy} />
+      {mapLabel && <MapLabel label={mapLabel} />}
 
-      <div style={{ position: "absolute", top: TABLE_TOP, left: PHOTO_COLUMN_WIDTH_PORTRAIT, right: 40 }}>
+      <div style={{ position: "absolute", top: TABLE_TOP, left: PHOTO_COLUMN_WIDTH_PORTRAIT, right: 40, display: "flex", gap: CHAMPION_COL_GAP }}>
+        {showChampionRush && <ChampionRushColumn entries={standings} />}
         <ResultTable entries={standings} startRank={1} width={tableWidth} />
       </div>
 
