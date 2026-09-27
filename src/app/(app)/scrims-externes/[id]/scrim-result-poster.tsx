@@ -424,6 +424,10 @@ function TitleBlock({ title, hostedBy }: { title: string; hostedBy: string }) {
 // Toujours peinte AVANT le logo/titre dans le DOM (donc en-dessous) : la
 // photo s'aligne sur le bas du petit triangle orange (sa pointe, à gauche,
 // pas son bord haut) et ne doit jamais passer par-dessus le logo ou le titre.
+// HOST_PHOTO_TOP est repris tel quel par ScrimResultPoster pour calculer sa
+// hauteur (le haut ne bouge jamais, seule la hauteur dépend du tableau).
+const HOST_PHOTO_TOP = 130;
+
 function HostPhoto({ photoDataUrl, width, height }: { photoDataUrl: string; width: number; height: number }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element -- capturé hors DOM Next.js normal (html-to-image)
@@ -433,7 +437,7 @@ function HostPhoto({ photoDataUrl, width, height }: { photoDataUrl: string; widt
       style={{
         position: "absolute",
         left: -10,
-        top: 130,
+        top: HOST_PHOTO_TOP,
         width,
         height,
         objectFit: "cover",
@@ -496,6 +500,15 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
   // s'ajoute juste avant le tableau droit (elle "pousse" ce tableau vers la
   // droite sans bouger le tableau gauche, voir le layout plus bas).
   const logoCenterX = tableLeft + (containerWidth + crownExtra) / 2;
+  // Bas de la photo = bas du tableau + un léger dépassement (24px, le même
+  // qu'avant le passage au format fixe 1920×1080 — voir posterHeight, où ce
+  // dépassement ressortait de "+90" moins la marge basse réelle) ; le haut ne
+  // bouge jamais (HOST_PHOTO_TOP), seule la hauteur suit la hauteur réelle du
+  // tableau (rowH adaptatif compris), jamais une valeur fixe déconnectée du
+  // nombre d'équipes.
+  const PHOTO_OVERSHOOT = 24;
+  const tableBottomY = TABLE_TOP + TABLE_HEADER_H + rowCount * rowH;
+  const photoHeight = tableBottomY + PHOTO_OVERSHOOT - HOST_PHOTO_TOP;
 
   return (
     <div
@@ -511,7 +524,7 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
     >
       <CornerTriangles />
 
-      {photoDataUrl && <HostPhoto photoDataUrl={photoDataUrl} width={PHOTO_COLUMN_WIDTH + 30} height={height - 230} />}
+      {photoDataUrl && <HostPhoto photoDataUrl={photoDataUrl} width={PHOTO_COLUMN_WIDTH + 30} height={photoHeight} />}
 
       {/* eslint-disable-next-line @next/next/no-img-element -- capturé hors DOM Next.js normal (html-to-image) */}
       <img
