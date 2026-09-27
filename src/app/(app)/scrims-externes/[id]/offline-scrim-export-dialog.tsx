@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Sheet } from "@/components/ui/sheet";
 import { apiRequest } from "@/lib/api-client";
-import { PosterStandingEntry, ScrimResultPoster } from "./scrim-result-poster";
+import { PosterStandingEntry, POSTER_WIDTH, POSTER_WIDTH_PORTRAIT, posterHeight, ScrimResultPoster, ScrimResultPosterPortrait } from "./scrim-result-poster";
 
 const HOSTED_BY = "FF Madagascar E-Sport";
 const PREVIEW_WIDTH = 380;
@@ -27,6 +27,16 @@ function slugify(name: string) {
   );
 }
 
+async function downloadNode(node: HTMLDivElement, filename: string) {
+  // pixelRatio 2 : export net même zoomé/imprimé, la capture ignore de toute
+  // façon la réduction visuelle appliquée à l'aperçu.
+  const dataUrl = await toPng(node, { pixelRatio: 2, cacheBust: true });
+  const link = document.createElement("a");
+  link.download = filename;
+  link.href = dataUrl;
+  link.click();
+}
+
 export function OfflineScrimExportDialog({
   open,
   onClose,
@@ -43,8 +53,9 @@ export function OfflineScrimExportDialog({
   const [standings, setStandings] = useState<PosterStandingEntry[] | null>(null);
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
-  const [generating, setGenerating] = useState(false);
+  const [generating, setGenerating] = useState<"landscape" | "portrait" | null>(null);
   const posterRef = useRef<HTMLDivElement>(null);
+  const posterPortraitRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -63,24 +74,23 @@ export function OfflineScrimExportDialog({
   }, [photo]);
 
   const dateLabel = useMemo(() => formatDateLabel(scrimStartAt), [scrimStartAt]);
+  const slug = slugify(scrimName);
 
-  async function download() {
-    if (!posterRef.current) return;
-    setGenerating(true);
+  async function download(kind: "landscape" | "portrait") {
+    const node = kind === "landscape" ? posterRef.current : posterPortraitRef.current;
+    if (!node) return;
+    setGenerating(kind);
     try {
-      // pixelRatio 2 : export net même zoomé/imprimé, la capture ignore de
-      // toute façon la réduction visuelle appliquée à l'aperçu ci-dessous.
-      const dataUrl = await toPng(posterRef.current, { pixelRatio: 2, cacheBust: true });
-      const link = document.createElement("a");
-      link.download = `${slugify(scrimName)}-resultats.png`;
-      link.href = dataUrl;
-      link.click();
+      await downloadNode(node, `${slug}-resultats-${kind === "landscape" ? "paysage" : "portrait"}.png`);
     } finally {
-      setGenerating(false);
+      setGenerating(null);
     }
   }
 
-  const previewScale = standings ? PREVIEW_WIDTH / 1600 : 1;
+  const landscapeScale = PREVIEW_WIDTH / POSTER_WIDTH;
+  const portraitScale = PREVIEW_WIDTH / POSTER_WIDTH_PORTRAIT;
+  const landscapeRowCount = standings ? Math.max(Math.ceil(standings.length / 2), 1) : 1;
+  const portraitRowCount = standings ? Math.max(standings.length, 1) : 1;
 
   return (
     <Sheet open={open} onClose={onClose} title="Exporter le résultat en image">
@@ -116,40 +126,63 @@ export function OfflineScrimExportDialog({
           <p className="text-xs text-muted-foreground">Jamais envoyée ni sauvegardée — utilisée uniquement pour cette image.</p>
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label>Aperçu</Label>
-          {!standings ? (
-            <div className="flex h-40 items-center justify-center">
-              <Loader2 className="size-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : standings.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Aucune équipe assignée à un résultat pour le moment — rien à exporter.
-            </p>
-          ) : (
-            <div
-              className="overflow-hidden rounded-md border border-border"
-              style={{ width: PREVIEW_WIDTH, height: (240 + Math.ceil(standings.length / 2) * 46 + 90) * previewScale }}
-            >
-              <div style={{ transform: `scale(${previewScale})`, transformOrigin: "top left" }}>
-                <ScrimResultPoster
-                  ref={posterRef}
-                  title={scrimName}
-                  hostedBy={HOSTED_BY}
-                  dateLabel={dateLabel}
-                  standings={standings}
-                  photoDataUrl={photoDataUrl}
-                  logoSrc="/brand/logo-light-bg.png"
-                />
+        {!standings ? (
+          <div className="flex h-40 items-center justify-center">
+            <Loader2 className="size-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : standings.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Aucune équipe assignée à un résultat pour le moment — rien à exporter.</p>
+        ) : (
+          <>
+            <div className="flex flex-col gap-1.5">
+              <Label>Aperçu — paysage</Label>
+              <div
+                className="overflow-hidden rounded-md border border-border"
+                style={{ width: PREVIEW_WIDTH, height: posterHeight(landscapeRowCount) * landscapeScale }}
+              >
+                <div style={{ transform: `scale(${landscapeScale})`, transformOrigin: "top left" }}>
+                  <ScrimResultPoster
+                    ref={posterRef}
+                    title={scrimName}
+                    hostedBy={HOSTED_BY}
+                    dateLabel={dateLabel}
+                    standings={standings}
+                    photoDataUrl={photoDataUrl}
+                    logoSrc="/brand/logo-light-bg.png"
+                  />
+                </div>
               </div>
+              <Button onClick={() => download("landscape")} disabled={generating !== null}>
+                {generating === "landscape" ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+                Télécharger (paysage)
+              </Button>
             </div>
-          )}
-        </div>
 
-        <Button onClick={download} disabled={!standings || standings.length === 0 || generating}>
-          {generating ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
-          Télécharger le PNG
-        </Button>
+            <div className="flex flex-col gap-1.5">
+              <Label>Aperçu — portrait (A4)</Label>
+              <div
+                className="overflow-hidden rounded-md border border-border"
+                style={{ width: PREVIEW_WIDTH, height: posterHeight(portraitRowCount) * portraitScale }}
+              >
+                <div style={{ transform: `scale(${portraitScale})`, transformOrigin: "top left" }}>
+                  <ScrimResultPosterPortrait
+                    ref={posterPortraitRef}
+                    title={scrimName}
+                    hostedBy={HOSTED_BY}
+                    dateLabel={dateLabel}
+                    standings={standings}
+                    photoDataUrl={photoDataUrl}
+                    logoSrc="/brand/logo-light-bg.png"
+                  />
+                </div>
+              </div>
+              <Button onClick={() => download("portrait")} disabled={generating !== null}>
+                {generating === "portrait" ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+                Télécharger (portrait)
+              </Button>
+            </div>
+          </>
+        )}
       </div>
     </Sheet>
   );

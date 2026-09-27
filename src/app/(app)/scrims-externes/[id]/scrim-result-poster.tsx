@@ -8,17 +8,25 @@ import { Crosshair, Crown, Flag, Target } from "lucide-react";
 // bleu marine), indépendante du thème clair/sombre du backoffice.
 const ORANGE = "#F5821F";
 const NAVY = "#1B2438";
-// Légèrement transparent — si la photo déborde sous le tableau (voir le
-// composant principal), elle reste devinable derrière sans jamais nuire à
-// la lisibilité du texte (blanc, fortement contrasté même à 90% d'opacité).
+// Légèrement transparent — si la photo déborde sous le tableau (voir les
+// deux composants plus bas), elle reste devinable derrière sans jamais nuire
+// à la lisibilité du texte (blanc, fortement contrasté même à 90% d'opacité).
 const ROW_BG = "rgba(20,28,46,0.92)";
 const GOLD = "#F5C842";
 const AMBER = "#FDBA47";
 const GREEN = "#3ADC7A";
 const MUTED = "#9BA6BC";
 
-const WIDTH = 1600;
-const PHOTO_COLUMN_WIDTH = 260;
+const TABLE_TOP = 168;
+const TABLE_HEADER_H = 38;
+const ROW_H = 46;
+// Hauteur totale = zone titre/logo + tableau + marge basse (date) — même
+// rythme vertical pour les deux formats (paysage et portrait). Exportée pour
+// que l'aperçu réduit du panneau d'export calcule la même hauteur sans
+// dupliquer la formule.
+export function posterHeight(rowCount: number) {
+  return 240 + rowCount * ROW_H + 90;
+}
 
 export interface PosterStandingEntry {
   name: string;
@@ -103,31 +111,36 @@ function HeaderCell({
   );
 }
 
-function ResultTable({ entries, startRank }: { entries: PosterStandingEntry[]; startRank: number }) {
-  // Chaque table dispose de 630px (moitié de l'espace restant une fois les
-  // marges et la table voisine soustraites de WIDTH) — ces largeurs + le gap
-  // (8 × 6) + le padding (10 × 2) tiennent pile dedans, sans quoi les
-  // dernières colonnes (Booyah/Total) se retrouvaient rognées par l'overflow
-  // hidden du conteneur.
-  const RANK_W = 34;
-  const TEAM_W = 168;
-  const PLAYED_W = 62;
-  const KILLS_W = 54;
-  const PLACE_W = 86;
-  const BOOYAH_W = 84;
-  const TOTAL_W = 70;
+// Colonnes réglées à l'origine pour un tableau de 630px (format paysage,
+// deux tableaux côte à côte) — réutilisées proportionnellement pour tout
+// autre largeur (ex. le tableau unique, plus large, du format portrait) afin
+// de ne jamais avoir à retrouver ces réglages à la main.
+const BASE_COLUMNS = { RANK: 34, TEAM: 168, PLAYED: 62, KILLS: 54, PLACE: 86, BOOYAH: 84, TOTAL: 70 };
+const BASE_INNER = Object.values(BASE_COLUMNS).reduce((a, b) => a + b, 0);
+const PADDING = 10;
+const GAP = 8;
+
+function ResultTable({ entries, startRank, width }: { entries: PosterStandingEntry[]; startRank: number; width: number }) {
+  const ratio = (width - PADDING * 2 - GAP * 6) / BASE_INNER;
+  const RANK_W = Math.round(BASE_COLUMNS.RANK * ratio);
+  const TEAM_W = Math.round(BASE_COLUMNS.TEAM * ratio);
+  const PLAYED_W = Math.round(BASE_COLUMNS.PLAYED * ratio);
+  const KILLS_W = Math.round(BASE_COLUMNS.KILLS * ratio);
+  const PLACE_W = Math.round(BASE_COLUMNS.PLACE * ratio);
+  const BOOYAH_W = Math.round(BASE_COLUMNS.BOOYAH * ratio);
+  const TOTAL_W = Math.round(BASE_COLUMNS.TOTAL * ratio);
 
   return (
-    <div style={{ flex: 1, borderRadius: 6, overflow: "hidden" }}>
+    <div style={{ width, borderRadius: 6, overflow: "hidden" }}>
       <div
         style={{
           display: "flex",
           alignItems: "center",
           background: ORANGE,
-          height: 38,
-          paddingLeft: 10,
-          paddingRight: 10,
-          gap: 8,
+          height: TABLE_HEADER_H,
+          paddingLeft: PADDING,
+          paddingRight: PADDING,
+          gap: GAP,
         }}
       >
         <div style={{ width: RANK_W, color: NAVY, fontSize: 11, fontWeight: 800 }}>#</div>
@@ -148,10 +161,10 @@ function ResultTable({ entries, startRank }: { entries: PosterStandingEntry[]; s
               display: "flex",
               alignItems: "center",
               background: ROW_BG,
-              height: 46,
-              paddingLeft: 10,
-              paddingRight: 10,
-              gap: 8,
+              height: ROW_H,
+              paddingLeft: PADDING,
+              paddingRight: PADDING,
+              gap: GAP,
               borderBottom: "1px solid rgba(255,255,255,0.06)",
             }}
           >
@@ -207,11 +220,83 @@ function ResultTable({ entries, startRank }: { entries: PosterStandingEntry[]; s
   );
 }
 
+function CornerTriangles() {
+  return (
+    <>
+      <div
+        style={{ position: "absolute", top: 0, left: 0, width: 260, height: 130, background: ORANGE, clipPath: "polygon(0 0, 100% 0, 0 100%)" }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          right: 0,
+          width: 260,
+          height: 130,
+          background: ORANGE,
+          clipPath: "polygon(100% 0, 100% 100%, 0 0)",
+        }}
+      />
+    </>
+  );
+}
+
+function TitleBlock({ title, hostedBy }: { title: string; hostedBy: string }) {
+  return (
+    <div style={{ position: "absolute", top: 36, left: 0, right: 0, textAlign: "center" }}>
+      <p style={{ margin: 0, fontSize: 46, fontWeight: 900, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>{title}</p>
+      <span
+        style={{
+          display: "inline-block",
+          marginTop: 6,
+          padding: "5px 18px",
+          borderRadius: 999,
+          border: `2px solid ${ORANGE}`,
+          color: ORANGE,
+          fontSize: 11,
+          fontWeight: 800,
+          letterSpacing: 1,
+          textTransform: "uppercase",
+        }}
+      >
+        Hosted by {hostedBy}
+      </span>
+    </div>
+  );
+}
+
+// Toujours peinte AVANT le logo/titre dans le DOM (donc en-dessous) : la
+// photo remonte haut, jusqu'au niveau du petit triangle orange, et ne doit
+// jamais passer par-dessus le logo ou le titre.
+function HostPhoto({ photoDataUrl, width, height }: { photoDataUrl: string; width: number; height: number }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- capturé hors DOM Next.js normal (html-to-image)
+    <img
+      src={photoDataUrl}
+      alt=""
+      style={{
+        position: "absolute",
+        left: -10,
+        top: 10,
+        width,
+        height,
+        objectFit: "cover",
+        objectPosition: "top",
+        maskImage: "linear-gradient(to bottom, black 85%, transparent 100%)",
+      }}
+    />
+  );
+}
+
 // Rendu à taille fixe (1600px de large) pour une capture PNG nette et
 // prévisible, quel que soit l'écran de l'admin qui exporte — le composant
 // n'est jamais affiché tel quel dans l'UI, seulement capturé (voir
 // offline-scrim-export-dialog.tsx qui l'affiche réduit via un transform
 // CSS purement visuel, sans jamais changer sa taille réelle).
+export const POSTER_WIDTH = 1600;
+const WIDTH = POSTER_WIDTH;
+const PHOTO_COLUMN_WIDTH = 260;
+
 export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterProps>(function ScrimResultPoster(
   { title, hostedBy, dateLabel, standings, photoDataUrl, logoSrc },
   ref
@@ -220,7 +305,8 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
   const left = standings.slice(0, half);
   const right = standings.slice(half);
   const rowCount = Math.max(left.length, right.length, 1);
-  const height = 240 + rowCount * 46 + 90;
+  const height = posterHeight(rowCount);
+  const tableWidth = (WIDTH - 40 - PHOTO_COLUMN_WIDTH - 40) / 2;
 
   return (
     <div
@@ -234,28 +320,9 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
         fontFamily: "var(--font-geist-sans, Arial, Helvetica, sans-serif)",
       }}
     >
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: 260,
-          height: 130,
-          background: ORANGE,
-          clipPath: "polygon(0 0, 100% 0, 0 100%)",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          right: 0,
-          width: 260,
-          height: 130,
-          background: ORANGE,
-          clipPath: "polygon(100% 0, 100% 100%, 0 0)",
-        }}
-      />
+      <CornerTriangles />
+
+      {photoDataUrl && <HostPhoto photoDataUrl={photoDataUrl} width={PHOTO_COLUMN_WIDTH + 30} height={height - 230} />}
 
       {/* eslint-disable-next-line @next/next/no-img-element -- capturé hors DOM Next.js normal (html-to-image) */}
       <img
@@ -266,76 +333,17 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
         style={{ position: "absolute", top: 32, left: 40, borderRadius: "50%", border: "3px solid #fff", boxShadow: "0 2px 10px rgba(0,0,0,0.15)" }}
       />
 
-      <div style={{ position: "absolute", top: 36, left: 0, right: 0, textAlign: "center" }}>
-        <p
-          style={{
-            margin: 0,
-            fontSize: 46,
-            fontWeight: 900,
-            color: NAVY,
-            textTransform: "uppercase",
-            letterSpacing: 0.5,
-          }}
-        >
-          {title}
-        </p>
-        <span
-          style={{
-            display: "inline-block",
-            marginTop: 6,
-            padding: "5px 18px",
-            borderRadius: 999,
-            border: `2px solid ${ORANGE}`,
-            color: ORANGE,
-            fontSize: 11,
-            fontWeight: 800,
-            letterSpacing: 1,
-            textTransform: "uppercase",
-          }}
-        >
-          Hosted by {hostedBy}
-        </span>
-      </div>
+      <TitleBlock title={title} hostedBy={hostedBy} />
 
-      {photoDataUrl && (
-        // eslint-disable-next-line @next/next/no-img-element -- capturé hors DOM Next.js normal (html-to-image)
-        <img
-          src={photoDataUrl}
-          alt=""
-          style={{
-            position: "absolute",
-            left: -10,
-            // Alignée sur le haut du tableau, pas plaquée tout en bas.
-            top: 168,
-            // Déborde volontairement un peu sous le tableau de gauche (voir
-            // ROW_BG semi-transparent) plutôt que de laisser une bande vide.
-            width: PHOTO_COLUMN_WIDTH + 30,
-            height: height - 230,
-            objectFit: "cover",
-            objectPosition: "top",
-            maskImage: "linear-gradient(to bottom, black 85%, transparent 100%)",
-          }}
-        />
-      )}
-
-      <div
-        style={{
-          position: "absolute",
-          top: 168,
-          left: PHOTO_COLUMN_WIDTH,
-          right: 40,
-          display: "flex",
-          gap: 40,
-        }}
-      >
-        <ResultTable entries={left} startRank={1} />
-        <ResultTable entries={right} startRank={half + 1} />
+      <div style={{ position: "absolute", top: TABLE_TOP, left: PHOTO_COLUMN_WIDTH, right: 40, display: "flex", gap: 40 }}>
+        <ResultTable entries={left} startRank={1} width={tableWidth} />
+        <ResultTable entries={right} startRank={half + 1} width={tableWidth} />
       </div>
 
       <div
         style={{
           position: "absolute",
-          top: 168 + (38 + rowCount * 46) / 2 - 34,
+          top: TABLE_TOP + (TABLE_HEADER_H + rowCount * ROW_H) / 2 - 34,
           left: PHOTO_COLUMN_WIDTH + (WIDTH - 40 - PHOTO_COLUMN_WIDTH) / 2 - 34,
           width: 68,
           height: 68,
@@ -353,6 +361,60 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
       </div>
 
       <div style={{ position: "absolute", bottom: 22, left: PHOTO_COLUMN_WIDTH, color: "#8A93A6", fontSize: 15 }}>{dateLabel}</div>
+    </div>
+  );
+});
+
+// Format portrait (façon A4) — un seul tableau reprenant tout le classement
+// (pas de coupure en deux colonnes, la hauteur disponible n'a pas la même
+// contrainte qu'en paysage), photo agrandie à gauche débordant davantage
+// sous le tableau. Même charte, mêmes composants, juste une mise en page
+// différente (voir offline-scrim-export-dialog, qui propose les deux
+// formats en téléchargement séparé).
+export const POSTER_WIDTH_PORTRAIT = 1000;
+const WIDTH_PORTRAIT = POSTER_WIDTH_PORTRAIT;
+const PHOTO_COLUMN_WIDTH_PORTRAIT = 220;
+
+export const ScrimResultPosterPortrait = forwardRef<HTMLDivElement, ScrimResultPosterProps>(function ScrimResultPosterPortrait(
+  { title, hostedBy, dateLabel, standings, photoDataUrl, logoSrc },
+  ref
+) {
+  const rowCount = Math.max(standings.length, 1);
+  const height = posterHeight(rowCount);
+  const tableWidth = WIDTH_PORTRAIT - 40 - PHOTO_COLUMN_WIDTH_PORTRAIT;
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        position: "relative",
+        width: WIDTH_PORTRAIT,
+        height,
+        background: "#EEF1F6",
+        overflow: "hidden",
+        fontFamily: "var(--font-geist-sans, Arial, Helvetica, sans-serif)",
+      }}
+    >
+      <CornerTriangles />
+
+      {photoDataUrl && <HostPhoto photoDataUrl={photoDataUrl} width={PHOTO_COLUMN_WIDTH_PORTRAIT + 80} height={TABLE_HEADER_H + rowCount * ROW_H} />}
+
+      {/* eslint-disable-next-line @next/next/no-img-element -- capturé hors DOM Next.js normal (html-to-image) */}
+      <img
+        src={logoSrc}
+        alt=""
+        width={84}
+        height={84}
+        style={{ position: "absolute", top: 32, left: 40, borderRadius: "50%", border: "3px solid #fff", boxShadow: "0 2px 10px rgba(0,0,0,0.15)" }}
+      />
+
+      <TitleBlock title={title} hostedBy={hostedBy} />
+
+      <div style={{ position: "absolute", top: TABLE_TOP, left: PHOTO_COLUMN_WIDTH_PORTRAIT, right: 40 }}>
+        <ResultTable entries={standings} startRank={1} width={tableWidth} />
+      </div>
+
+      <div style={{ position: "absolute", bottom: 22, left: PHOTO_COLUMN_WIDTH_PORTRAIT, color: "#8A93A6", fontSize: 15 }}>{dateLabel}</div>
     </div>
   );
 });
