@@ -433,10 +433,29 @@ function ChampionBanner({ entry, width }: { entry: PosterStandingEntry; width: n
       }}
     >
       <TeamAvatar logoUrl={entry.logoUrl} label={entry.tag ?? entry.name} size={56} />
-      <span style={{ fontSize: 22, fontWeight: 900, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, whiteSpace: "nowrap" }}>
-        <Crown size={18} strokeWidth={2.5} style={{ verticalAlign: -3, marginRight: 8 }} />
-        Champion : {entry.name}
-      </span>
+      {/* "Champion" + icône sur une ligne, le nom de l'équipe en dessous —
+          jamais côte à côte : un nom un peu long pousserait sinon les cartes
+          de stats hors du bandeau (voir width, calée sur l'en-tête seul). */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", color: "rgba(27,36,56,0.7)" }}>
+          <Crown size={14} strokeWidth={2.5} />
+          Champion
+        </span>
+        <span
+          style={{
+            fontSize: 20,
+            fontWeight: 900,
+            color: NAVY,
+            textTransform: "uppercase",
+            letterSpacing: 0.3,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {entry.name}
+        </span>
+      </div>
       <div style={{ flex: 1 }} />
       <div style={{ display: "flex", gap: 10 }}>
         <BannerStat label="Elimination" value={entry.totalKills} />
