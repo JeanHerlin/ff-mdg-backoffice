@@ -35,14 +35,18 @@ function slugify(name: string) {
   );
 }
 
-// Un Booyah gagné PILE dans le match où l'équipe franchit le seuil de points
-// ne suffit pas à en faire la championne (le Booyah de ce match a déjà servi
-// à passer le seuil) — il en faut un AUTRE, dans un match différent, avant ou
-// après. Retourne le numéro du match (GLOBAL, pas un index local à l'équipe)
-// à partir duquel les DEUX conditions sont réunies (seuil franchi ET Booyah
-// valable) — le plus petit possible, pour départager plusieurs équipes
-// éligibles par qui y est arrivé en premier chronologiquement (voir
-// displayStandings) — ou null si l'équipe n'est pas encore éligible.
+// Le Champion Rush doit déjà être ACTIF (seuil de points déjà franchi) au
+// moment du Booyah — un Booyah gagné AVANT ou PENDANT le match qui fait
+// franchir le seuil ne compte pas (l'équipe n'était pas encore éligible à ce
+// moment-là), seul un Booyah dans un match STRICTEMENT POSTÉRIEUR à celui-ci
+// la fait devenir championne. Confirmé sur données réelles (scrim "PAID
+// SCRIM 27/09/2026") : sans cette restriction, une équipe ayant décroché un
+// Booyah avant même d'avoir atteint le seuil se retrouvait à tort mise en
+// avant à la place de la vraie championne. Retourne le numéro du match
+// (GLOBAL, pas un index local à l'équipe) de ce Booyah qualifiant — le plus
+// petit possible, pour départager plusieurs équipes éligibles par qui y est
+// arrivé en premier chronologiquement (voir displayStandings) — ou null si
+// l'équipe n'est pas encore éligible.
 function championEligibleFromMatch(
   matches: { matchNumber: number; points: number; booyah: boolean }[],
   threshold: number
@@ -57,12 +61,8 @@ function championEligibleFromMatch(
 
   let eligibleAt: number | null = null;
   for (const m of matches) {
-    if (!m.booyah || m.matchNumber === crossingMatchNumber) continue;
-    // Si ce Booyah est venu AVANT le franchissement du seuil, l'éligibilité
-    // n'est acquise qu'au moment du franchissement (crossingMatchNumber) ;
-    // s'il est venu APRÈS, c'est ce Booyah qui la déclenche.
-    const candidate = Math.max(crossingMatchNumber, m.matchNumber);
-    if (eligibleAt === null || candidate < eligibleAt) eligibleAt = candidate;
+    if (!m.booyah || m.matchNumber <= crossingMatchNumber) continue;
+    if (eligibleAt === null || m.matchNumber < eligibleAt) eligibleAt = m.matchNumber;
   }
   return eligibleAt;
 }
