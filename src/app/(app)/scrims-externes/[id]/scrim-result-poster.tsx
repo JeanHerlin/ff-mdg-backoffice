@@ -628,8 +628,12 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
       <TitleBlock title={title} hostedBy={hostedBy} />
       {mapLabel && <MapLabel label={mapLabel} />}
       {championEntry && (
-        <div style={{ position: "absolute", top: TABLE_TOP, left: tableLeft, width: containerWidth }}>
-          <ChampionBanner entry={championEntry} width={containerWidth} />
+        // Largeur d'UN SEUL tableau (colonne couronne + ResultTable), pas des
+        // deux combinés — un bandeau aussi large que les deux tableaux réunis
+        // paraissait disproportionné par rapport à chacun d'eux pris seul, on
+        // le centre donc à la même largeur qu'un tableau, entre les deux.
+        <div style={{ position: "absolute", top: TABLE_TOP, left: tableLeft + (containerWidth - (tableWidth + crownExtra)) / 2 }}>
+          <ChampionBanner entry={championEntry} width={tableWidth + crownExtra} />
         </div>
       )}
 
