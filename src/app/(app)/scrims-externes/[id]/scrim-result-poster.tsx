@@ -18,12 +18,18 @@ const ROW_BG = "rgba(20,28,46,0.92)";
 // terne où le texte blanc/ambre devenait illisible) : voir ResultTable, tout
 // le texte de cette ligne bascule sur CHAMPION_ROW_TEXT au lieu des couleurs
 // habituelles (blanc/gris/ambre) pour rester lisible sur ce fond clair.
-const CHAMPION_ROW_BG = "#F2C14E";
+const CHAMPION_ROW_BG = "#E3C468";
 const CHAMPION_ROW_TEXT = "#3D2B05";
 const CHAMPION_ROW_MUTED = "rgba(61,43,5,0.65)";
-const GOLD = "#F5C842";
-const AMBER = "#FDBA47";
-const GREEN = "#3ADC7A";
+// GOLD/AMBER volontairement approfondis (or antique / bronze) plutôt qu'un
+// jaune vif — à côté de BRAND_GREEN (vert saturé), un jaune citron pur
+// jurait visuellement ("couleurs qui ne se mélangent pas bien"). Un or plus
+// chaud et moins saturé forme un duo vert + or classique, jamais criard.
+const GOLD = "#D4A72C";
+const AMBER = "#C97B2E";
+// Même famille de teinte que BRAND_GREEN (au lieu d'un vert menthe sans
+// rapport) — les deux verts du visuel restent cohérents entre eux.
+const GREEN = "#8BDB3A";
 const MUTED = "#9BA6BC";
 
 const TABLE_TOP = 168;
@@ -409,7 +415,7 @@ function BannerStat({ label, value, highlight }: { label: string; value: number;
           fontWeight: 800,
           letterSpacing: 0.6,
           textTransform: "uppercase",
-          color: highlight ? "rgba(245,196,66,0.9)" : "rgba(27,36,56,0.65)",
+          color: highlight ? "rgba(212,167,44,0.9)" : "rgba(27,36,56,0.65)",
         }}
       >
         {label}
@@ -601,7 +607,7 @@ function TitleBlock({ title }: { title: string; hostedBy: string }) {
 }
 
 // Toujours peinte AVANT le logo/titre dans le DOM (donc en-dessous) : la
-// photo s'aligne sur le bas du petit triangle orange (sa pointe, à gauche,
+// photo s'aligne sur le bas du petit triangle de coin (sa pointe, à gauche,
 // pas son bord haut) et ne doit jamais passer par-dessus le logo ou le titre.
 // HOST_PHOTO_TOP est repris tel quel par ScrimResultPoster pour calculer sa
 // hauteur (le haut ne bouge jamais, seule la hauteur dépend du tableau).
@@ -727,9 +733,9 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
       {mapLabel && <MapLabel label={mapLabel} />}
       {championEntry && (
         // Au-dessus du PREMIER tableau (gauche) uniquement, jamais des deux —
-        // et calé exactement sur la largeur de son en-tête orange (tableWidth
-        // seul, sans la colonne couronne) : le bandeau ne doit jamais déborder
-        // vers la case couronne, juste s'aligner avec le tableau lui-même.
+        // et calé exactement sur la largeur de son en-tête (tableWidth seul,
+        // sans la colonne couronne) : le bandeau ne doit jamais déborder vers
+        // la case couronne, juste s'aligner avec le tableau lui-même.
         <div style={{ position: "absolute", top: TABLE_TOP, left: tableLeft + crownExtra }}>
           <ChampionBanner entry={championEntry} width={tableWidth} />
         </div>
@@ -831,9 +837,9 @@ export const ScrimResultPosterPortrait = forwardRef<HTMLDivElement, ScrimResultP
       <TitleBlock title={title} hostedBy={hostedBy} />
       {mapLabel && <MapLabel label={mapLabel} />}
       {championEntry && (
-        // Calé exactement sur la largeur de l'en-tête orange du tableau
-        // (tableWidth seul, sans la colonne couronne) — voir le même
-        // raisonnement dans ScrimResultPoster (paysage).
+        // Calé exactement sur la largeur de l'en-tête du tableau (tableWidth
+        // seul, sans la colonne couronne) — voir le même raisonnement dans
+        // ScrimResultPoster (paysage).
         <div style={{ position: "absolute", top: TABLE_TOP, left: tableLeft + crownExtra }}>
           <ChampionBanner entry={championEntry} width={tableWidth} />
         </div>

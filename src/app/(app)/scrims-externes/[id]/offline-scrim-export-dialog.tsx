@@ -252,7 +252,7 @@ export function OfflineScrimExportDialog({
                     dateLabel={dateLabel}
                     standings={displayStandings}
                     photoDataUrl={photoDataUrl}
-                    logoSrc="/brand/logo-light-bg.png"
+                    logoSrc="/brand/logo-dark-bg.png"
                     showChampionRush={championRushOn}
                     mapLabel={mapLabel}
                   />
@@ -278,7 +278,7 @@ export function OfflineScrimExportDialog({
                     dateLabel={dateLabel}
                     standings={displayStandings}
                     photoDataUrl={photoDataUrl}
-                    logoSrc="/brand/logo-light-bg.png"
+                    logoSrc="/brand/logo-dark-bg.png"
                     showChampionRush={championRushOn}
                     mapLabel={mapLabel}
                   />
