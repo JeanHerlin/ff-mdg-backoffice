@@ -3,10 +3,11 @@
 import { forwardRef } from "react";
 import { Crosshair, Crown, Flag, Target } from "lucide-react";
 
-// Couleurs propres à ce visuel exporté (pas le thème de l'appli — vert/rouge
-// ailleurs) : reprend la charte "Daily" fournie par le client (orange +
-// bleu marine), indépendante du thème clair/sombre du backoffice.
-const ORANGE = "#F5821F";
+// Couleur d'accent — alignée sur le vert principal du backoffice (--primary,
+// voir globals.css), remplace l'orange de la première maquette "Daily" à la
+// demande du client ("rester sur la couleur verte comme dans le backoffice
+// de base"). NAVY reste la couleur de fond sombre, inchangée.
+const BRAND_GREEN = "#4bb805";
 const NAVY = "#1B2438";
 // Légèrement transparent — si la photo déborde sous le tableau (voir les
 // deux composants plus bas), elle reste devinable derrière sans jamais nuire
@@ -113,8 +114,8 @@ function TeamAvatar({ logoUrl, label, size = 34 }: { logoUrl: string | null; lab
         width: size,
         height: size,
         borderRadius: 8,
-        background: "rgba(245,130,31,0.18)",
-        color: ORANGE,
+        background: "rgba(75,184,5,0.18)",
+        color: BRAND_GREEN,
         fontSize: Math.max(9, Math.round(size * 0.35)),
         fontWeight: 800,
         flexShrink: 0,
@@ -221,7 +222,7 @@ function ResultTable({
         style={{
           display: "flex",
           alignItems: "center",
-          background: ORANGE,
+          background: BRAND_GREEN,
           height: TABLE_HEADER_H,
           paddingLeft: PADDING,
           paddingRight: PADDING,
@@ -476,11 +477,86 @@ function MapLabel({ label }: { label: string }) {
   );
 }
 
+// Ligne de logos/icônes en bas de l'affiche (jeu + réseaux sociaux) — demande
+// client explicite. Aucun asset officiel disponible dans le repo (pas
+// d'accès pour en récupérer), donc badges ronds avec pictos dessinés en SVG
+// simple plutôt que les logos exacts des marques.
+function TikTokGlyph() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="#fff">
+      <path d="M16 3c.4 2.4 2 4 4.5 4.3V10c-1.6 0-3.1-.5-4.5-1.4v6.6a5.5 5.5 0 1 1-5.5-5.5c.3 0 .6 0 .9.1v2.6a2.9 2.9 0 1 0 2 2.8V3h2.6Z" />
+    </svg>
+  );
+}
+
+function InstagramGlyph() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2}>
+      <rect x="3" y="3" width="18" height="18" rx="5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.5" cy="6.5" r="1" fill="#fff" stroke="none" />
+    </svg>
+  );
+}
+
+function YoutubeGlyph() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="#fff">
+      <path d="M8 5v14l11-7z" />
+    </svg>
+  );
+}
+
+function SocialBadge({ background, children }: { background: string; children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        width: 32,
+        height: 32,
+        borderRadius: "50%",
+        background,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        boxShadow: "0 2px 6px rgba(0,0,0,0.18)",
+        flexShrink: 0,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function SocialBar({ width }: { width: number }) {
+  return (
+    <div style={{ position: "absolute", bottom: 18, left: 0, width, display: "flex", justifyContent: "center", gap: 12 }}>
+      <SocialBadge background="linear-gradient(135deg,#FF7A00,#E30613)">
+        <span style={{ color: "#fff", fontWeight: 900, fontSize: 11, letterSpacing: -0.3 }}>FF</span>
+      </SocialBadge>
+      <SocialBadge background="#0F7FE8">
+        <span style={{ color: "#fff", fontWeight: 900, fontSize: 14 }}>G</span>
+      </SocialBadge>
+      <SocialBadge background="#000000">
+        <TikTokGlyph />
+      </SocialBadge>
+      <SocialBadge background="linear-gradient(135deg,#f58529,#dd2a7b,#8134af,#515bd4)">
+        <InstagramGlyph />
+      </SocialBadge>
+      <SocialBadge background="#FF0000">
+        <YoutubeGlyph />
+      </SocialBadge>
+      <SocialBadge background="#1877F2">
+        <span style={{ color: "#fff", fontWeight: 900, fontSize: 16, fontStyle: "italic" }}>f</span>
+      </SocialBadge>
+    </div>
+  );
+}
+
 function CornerTriangles() {
   return (
     <>
       <div
-        style={{ position: "absolute", top: 0, left: 0, width: 260, height: 130, background: ORANGE, clipPath: "polygon(0 0, 100% 0, 0 100%)" }}
+        style={{ position: "absolute", top: 0, left: 0, width: 260, height: 130, background: BRAND_GREEN, clipPath: "polygon(0 0, 100% 0, 0 100%)" }}
       />
       <div
         style={{
@@ -489,7 +565,7 @@ function CornerTriangles() {
           right: 0,
           width: 260,
           height: 130,
-          background: ORANGE,
+          background: BRAND_GREEN,
           clipPath: "polygon(100% 0, 100% 100%, 0 0)",
         }}
       />
@@ -497,7 +573,10 @@ function CornerTriangles() {
   );
 }
 
-function TitleBlock({ title, hostedBy }: { title: string; hostedBy: string }) {
+// hostedBy n'est plus affiché (badge remplacé par "CLASSEMENT GÉNÉRAL" à la
+// demande du client), gardé dans la signature pour ne pas casser l'appel des
+// deux variantes ni la prop de ScrimResultPosterProps.
+function TitleBlock({ title }: { title: string; hostedBy: string }) {
   return (
     <div style={{ position: "absolute", top: 36, left: 0, right: 0, textAlign: "center" }}>
       <p style={{ margin: 0, fontSize: 42, fontWeight: 900, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>{title}</p>
@@ -507,15 +586,15 @@ function TitleBlock({ title, hostedBy }: { title: string; hostedBy: string }) {
           marginTop: 6,
           padding: "5px 18px",
           borderRadius: 999,
-          border: `2px solid ${ORANGE}`,
-          color: ORANGE,
+          border: `2px solid ${BRAND_GREEN}`,
+          color: BRAND_GREEN,
           fontSize: 11,
           fontWeight: 800,
           letterSpacing: 1,
           textTransform: "uppercase",
         }}
       >
-        Hosted by {hostedBy}
+        Classement général
       </span>
     </div>
   );
@@ -688,6 +767,7 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
       </div>
 
       <div style={{ position: "absolute", bottom: 22, left: tableLeft, color: "#8A93A6", fontSize: 15 }}>{dateLabel}</div>
+      <SocialBar width={WIDTH} />
     </div>
   );
 });
@@ -765,6 +845,7 @@ export const ScrimResultPosterPortrait = forwardRef<HTMLDivElement, ScrimResultP
       </div>
 
       <div style={{ position: "absolute", bottom: 22, left: tableLeft, color: "#8A93A6", fontSize: 15 }}>{dateLabel}</div>
+      <SocialBar width={WIDTH_PORTRAIT} />
     </div>
   );
 });
