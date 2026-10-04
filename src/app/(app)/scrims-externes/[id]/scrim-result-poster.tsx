@@ -48,27 +48,21 @@ export function posterHeight(rowCount: number, hasChampionBanner = false) {
 
 // Le format paysage est un vrai 1920×1080 (16:9) fixe, pas une hauteur qui
 // grandit avec le nombre d'équipes — voir ScrimResultPoster, qui calcule une
-// hauteur de ligne qui REMPLIT exactement l'espace vertical disponible
-// (rowH = availableRowsHeight / rowCount, jamais plafonnée) : avec peu
-// d'équipes les lignes s'étirent pour occuper tout l'écran (demande client
-// explicite — un export qui laissait du vide en bas "ne remplissait pas
-// l'écran" une fois affiché en plein cadre dans OBS Studio) ; avec beaucoup
-// d'équipes elles rétrécissent pour continuer à toutes tenir. Avatar/police
-// suivent (voir ResultTable/ChampionRushColumn, scale plafonné à
-// LANDSCAPE_MAX_SCALE pour rester lisible sans déborder des colonnes même
-// quand les lignes deviennent très hautes — l'espace en trop devient alors
-// un espacement généreux autour du contenu plutôt qu'un agrandissement
-// démesuré du texte).
+// hauteur de ligne adaptative (rowHeight, toujours ≤ LANDSCAPE_ROW_H) pour
+// que toutes les équipes tiennent toujours dans ces 1080px, quel que soit
+// leur nombre : avec peu d'équipes les lignes montent jusqu'à leur taille
+// normale et de l'espace vide reste sous le tableau ; avec beaucoup d'équipes
+// les lignes (et leur contenu : avatar, police...) rétrécissent
+// proportionnellement plutôt que de déborder ou d'être coupées.
 export const POSTER_HEIGHT_LANDSCAPE = 1080;
+// Plus haut que ROW_H (46, utilisé par le portrait) — le format paysage a de
+// la marge en bas une fois la hauteur fixée à 1080px, autant en profiter pour
+// des lignes un peu plus confortables tant que le nombre d'équipes le permet.
+const LANDSCAPE_ROW_H = 54;
 // Même marge basse que posterHeight() (le "+90" de sa formule) — reproduite
-// ici pour que le calcul de hauteur de ligne parte du même repère visuel
-// (espace réservé sous le tableau avant le bord de l'affiche).
+// ici pour que le calcul de hauteur de ligne adaptative parte du même repère
+// visuel (espace réservé sous le tableau avant le bord de l'affiche).
 const LANDSCAPE_BOTTOM_MARGIN = 90;
-// Plafond de grossissement du contenu d'une ligne (avatar, police) par
-// rapport à sa taille de base (ROW_H) — la ligne elle-même peut s'étirer
-// bien plus que ça pour remplir l'écran, mais le texte s'arrête de grossir
-// à 1.7x pour ne jamais déborder la largeur des colonnes.
-const LANDSCAPE_MAX_SCALE = 1.7;
 
 export interface PosterStandingEntry {
   name: string;
@@ -211,12 +205,7 @@ function ResultTable({
   const BOOYAH_W = Math.round(BASE_COLUMNS.BOOYAH * ratio);
   const TOTAL_W = Math.round(BASE_COLUMNS.TOTAL * ratio);
 
-  // Grossit avec la ligne (jamais plafonné à 1x) jusqu'à LANDSCAPE_MAX_SCALE
-  // — au-delà, l'espace supplémentaire de la ligne devient de l'air autour
-  // du contenu plutôt que du texte toujours plus grand (déborderait des
-  // colonnes). Le portrait n'est jamais concerné : il ne passe jamais de
-  // rowHeight agrandie, scale y reste toujours exactement 1.
-  const scale = Math.min(LANDSCAPE_MAX_SCALE, rowHeight / ROW_H);
+  const scale = Math.min(1, rowHeight / ROW_H);
   const avatarSize = Math.round(34 * scale);
   const statFontSize = Math.max(10, Math.round(14 * scale));
   const nameFontSize = Math.max(11, Math.round(14 * scale));
@@ -352,10 +341,9 @@ const CHAMPION_COL_W = 40;
 const CHAMPION_COL_GAP = 0;
 
 function ChampionRushColumn({ entries, rowHeight = ROW_H }: { entries: PosterStandingEntry[]; rowHeight?: number }) {
-  // Même échelle que ResultTable (voir son commentaire sur rowHeight et
-  // LANDSCAPE_MAX_SCALE) — le badge couronne suit la ligne dans les deux
-  // sens, rétrécit pour ne jamais déborder, grossit jusqu'au même plafond.
-  const scale = Math.min(LANDSCAPE_MAX_SCALE, rowHeight / ROW_H);
+  // Même échelle que ResultTable (voir son commentaire sur rowHeight) — le
+  // badge couronne rétrécit avec la ligne pour ne jamais déborder.
+  const scale = Math.min(1, rowHeight / ROW_H);
   const badgeSize = Math.max(18, Math.round(30 * scale));
   const iconSize = Math.max(11, Math.round(18 * scale));
   return (
@@ -673,13 +661,15 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
   const championEntry = showChampionRush ? standings.find((e) => e.isChampion) : undefined;
   const bannerExtra = championEntry ? CHAMPION_BANNER_H + CHAMPION_BANNER_GAP : 0;
   const tableTop = TABLE_TOP + bannerExtra;
-  // Hauteur de ligne = exactement l'espace vertical disponible divisé par le
-  // nombre de lignes — remplit toujours tout le cadre 1080px, jamais de vide
-  // en bas avec peu d'équipes, jamais de coupure avec beaucoup (voir
-  // POSTER_HEIGHT_LANDSCAPE et ResultTable/ChampionRushColumn, dont
-  // l'avatar/police suit à l'échelle, plafonnée à LANDSCAPE_MAX_SCALE).
+  // Hauteur de ligne adaptative : à taille "confortable" (LANDSCAPE_ROW_H)
+  // tant que ça tient dans le budget vertical fixe, rétrécie
+  // proportionnellement sinon — jamais de coupure, quel que soit le nombre
+  // d'équipes (voir POSTER_HEIGHT_LANDSCAPE et ResultTable/ChampionRushColumn,
+  // qui suivent avec avatar/police à l'échelle, plafonnée à leur taille
+  // d'origine calée sur ROW_H : une ligne plus haute que ROW_H ne fait donc
+  // qu'ajouter de l'air autour du contenu, jamais l'agrandir).
   const availableRowsHeight = height - tableTop - LANDSCAPE_BOTTOM_MARGIN - TABLE_HEADER_H;
-  const rowH = availableRowsHeight / rowCount;
+  const rowH = Math.min(LANDSCAPE_ROW_H, availableRowsHeight / rowCount);
   const crownExtra = showChampionRush ? CHAMPION_COL_W + CHAMPION_COL_GAP : 0;
   // Largeur entre les deux tableaux (le "gap" du conteneur flex ci-dessous,
   // voir JSX) — TOUJOURS la même valeur, avec ou sans photo, pour que le
