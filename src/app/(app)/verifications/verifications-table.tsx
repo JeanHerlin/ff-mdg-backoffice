@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { apiRequestWithMeta, apiRequest, ApiError } from "@/lib/api-client";
+import { FfInGameCheck } from "@/components/ff-in-game-check";
 
 type Tab = "teams" | "players";
 
@@ -289,6 +290,12 @@ function PendingTeams({ search }: { search: string }) {
                         <p className="text-xs text-muted-foreground">
                           ID Free Fire : {member.user.playerProfile?.ffPlayerId ?? "—"} · {member.user.email}
                         </p>
+                        {member.user.playerProfile && (
+                          <FfInGameCheck
+                            uid={member.user.playerProfile.ffPlayerId}
+                            declaredPseudo={member.user.playerProfile.ffPseudo}
+                          />
+                        )}
                       </div>
                     </div>
                     <Badge variant={member.managementRole === "CAPTAIN" ? "default" : "muted"}>
@@ -432,7 +439,15 @@ function PendingPlayers({ search }: { search: string }) {
                       <Avatar url={fileSrc(player.avatarUrl)} label={player.playerProfile?.ffPseudo ?? "?"} />
                       <p className="font-medium text-foreground">{player.playerProfile?.ffPseudo}</p>
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{player.playerProfile?.ffPlayerId}</td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      <p>{player.playerProfile?.ffPlayerId}</p>
+                      {player.playerProfile && (
+                        <FfInGameCheck
+                          uid={player.playerProfile.ffPlayerId}
+                          declaredPseudo={player.playerProfile.ffPseudo}
+                        />
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground">{player.email}</td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
@@ -524,6 +539,13 @@ function PendingPlayers({ search }: { search: string }) {
                 ID Free Fire
               </label>
               <Input value={editFfPlayerId} onChange={(e) => setEditFfPlayerId(e.target.value)} maxLength={20} />
+              <div className="mt-1.5">
+                <FfInGameCheck
+                  uid={editFfPlayerId}
+                  declaredPseudo={editFfPseudo}
+                  onUsePseudo={(player) => setEditFfPseudo(player.pseudo)}
+                />
+              </div>
             </div>
           </div>
         )}

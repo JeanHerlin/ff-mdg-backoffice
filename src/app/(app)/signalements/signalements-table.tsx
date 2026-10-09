@@ -5,6 +5,7 @@ import { Search, ChevronLeft, ChevronRight, Loader2, ShieldAlert } from "lucide-
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { FfInGameCheck } from "@/components/ff-in-game-check";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -216,6 +217,7 @@ export function SignalementsTable() {
               <div>
                 <p className="text-lg font-semibold text-foreground">{selected.ffPseudo}</p>
                 <p className="text-sm text-muted-foreground">ID Free Fire : {selected.ffPlayerId}</p>
+                <FfInGameCheck uid={selected.ffPlayerId} declaredPseudo={selected.ffPseudo} />
               </div>
             </div>
 
