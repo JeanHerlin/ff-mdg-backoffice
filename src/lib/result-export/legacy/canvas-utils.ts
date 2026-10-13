@@ -248,11 +248,16 @@ export function planPlayerPhoto(baseWidth, tableTop, tableH, topLimit, opts){
   // limited only by a maximum width so wide photos don't swallow the image.
   let h = bottom - topLimit;
   let w = h * iw / ih;
-  const maxW = baseWidth * (PORTRAIT.on ? 0.24 : baseWidth < 1300 ? 0.34 : 0.26); // one-column images are narrower, so allow a relatively wider photo
+  // Portrait (1000px de large, hauteur variable) : la photo peut monter à la
+  // moitié de la largeur — sinon, sur une image haute, elle paraît minuscule.
+  const maxW = baseWidth * (PORTRAIT.on ? 0.5 : baseWidth < 1300 ? 0.34 : 0.26); // one-column images are narrower, so allow a relatively wider photo
   if(w > maxW){ w = maxW; h = w * ih / iw; }
   if(h < 120) return null;
+  // En portrait, ~55% de la photo passe sous le tableau (en transparence, voir
+  // drawPlayerPhoto) pour ne pas trop rétrécir les colonnes sur 1000px.
+  const effectiveOverlap = PORTRAIT.on ? Math.max(overlap, Math.round(w * 0.55)) : overlap;
   // The table starts ~44px in from the gutter, so subtract that too: what's left is the overlap.
-  return { img: img, x: left, y: bottom - h, w: w, h: h, gutter: Math.max(0, Math.round(left + w - 44 - overlap)) };
+  return { img: img, x: left, y: bottom - h, w: w, h: h, gutter: Math.max(0, Math.round(left + w - 44 - effectiveOverlap)) };
 }
 
 export function drawPlayerPhoto(ctx, photo, tableRects){
