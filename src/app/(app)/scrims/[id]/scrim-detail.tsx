@@ -649,7 +649,7 @@ export function ScrimDetail() {
       )}
 
       {(scrim.phase === "STARTED" || scrim.phase === "FINISHED") && (
-        <ScrimMatchesSection scrimId={params.id} lobbyMax={scrim.lobbyMax} />
+        <ScrimMatchesSection scrimId={params.id} lobbyMax={scrim.lobbyMax} scrimName={scrim.name} scrimStartAt={scrim.startAt} />
       )}
 
       <ConfirmDialog

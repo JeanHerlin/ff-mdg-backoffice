@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   CheckCircle2,
   Crown,
+  ImageDown,
   ImagePlus,
   Loader2,
   Plus,
@@ -22,6 +23,8 @@ import { Sheet } from "@/components/ui/sheet";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TabList, TabButton } from "@/components/ui/tabs";
 import { apiRequest, ApiError } from "@/lib/api-client";
+import { ResultExportModal } from "@/components/result-export/result-export-modal";
+import { standingsFromMatch } from "@/lib/result-export";
 
 const MAX_PLAYERS_PER_TEAM = 4;
 
@@ -108,6 +111,8 @@ interface StandingEntry {
   totalKills: number;
   matchesPlayed: number;
   booyahCount: number;
+  // Un point par match confirmé, chronologique — calcul Champion Rush de l'export.
+  matches?: { matchNumber: number; points: number; booyah: boolean }[];
 }
 
 function Logo({ url, label }: { url: string | null; label: string }) {
@@ -167,7 +172,17 @@ function GlobalStandingsTable({ standings }: { standings: StandingEntry[] }) {
   );
 }
 
-export function ScrimMatchesSection({ scrimId, lobbyMax }: { scrimId: string; lobbyMax: number }) {
+export function ScrimMatchesSection({
+  scrimId,
+  lobbyMax,
+  scrimName,
+  scrimStartAt,
+}: {
+  scrimId: string;
+  lobbyMax: number;
+  scrimName: string;
+  scrimStartAt: string;
+}) {
   const [matches, setMatches] = useState<Match[]>([]);
   const [lobbies, setLobbies] = useState<number[]>([]);
   const [activeLobby, setActiveLobby] = useState<number | undefined>(undefined);
@@ -176,6 +191,7 @@ export function ScrimMatchesSection({ scrimId, lobbyMax }: { scrimId: string; lo
   const [rosterPlayers, setRosterPlayers] = useState<RosterPlayerOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Match | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -277,10 +293,21 @@ export function ScrimMatchesSection({ scrimId, lobbyMax }: { scrimId: string; lo
       <CardHeader className="gap-3">
         <div className="flex flex-row items-center justify-between">
           <CardTitle>Résultats de matchs</CardTitle>
-          <Button size="sm" onClick={() => setAddOpen(true)}>
-            <Plus className="size-4" />
-            Ajouter un résultat
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setExportOpen(true)}
+              disabled={activeMatch ? !activeMatch.teamResults.some((tr) => tr.team) : standings.length === 0}
+            >
+              <ImageDown className="size-4" />
+              <span className="hidden sm:inline">Exporter les résultats</span>
+            </Button>
+            <Button size="sm" onClick={() => setAddOpen(true)}>
+              <Plus className="size-4" />
+              Ajouter un résultat
+            </Button>
+          </div>
         </div>
 
         {lobbies.length > 1 && (
@@ -357,6 +384,30 @@ export function ScrimMatchesSection({ scrimId, lobbyMax }: { scrimId: string; lo
           }}
         />
       </Sheet>
+
+      {/* Exporte ce qui est affiché : le classement global (du lobby choisi)
+          ou le match sélectionné — Champion Rush uniquement sur un cumul. */}
+      <ResultExportModal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        standings={activeMatch ? standingsFromMatch(activeMatch.teamResults) : standings}
+        title={scrimName}
+        subtitle={
+          activeMatch
+            ? `Match ${activeMatch.matchNumber} · ${MAP_LABEL[activeMatch.map]}`
+            : activeLobby !== undefined
+              ? `Lobby ${activeLobby}`
+              : ""
+        }
+        matchLabel={activeMatch ? MAP_LABEL[activeMatch.map] : undefined}
+        dateIso={scrimStartAt}
+        fileBaseName={
+          activeMatch
+            ? `${scrimName}-match-${activeMatch.matchNumber}`
+            : `${scrimName}${activeLobby !== undefined ? `-lobby-${activeLobby}` : ""}`
+        }
+        championRush={activeMatch ? null : {}}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}

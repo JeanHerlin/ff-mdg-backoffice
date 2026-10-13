@@ -11,8 +11,8 @@ import { Sheet } from "@/components/ui/sheet";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TabList, TabButton } from "@/components/ui/tabs";
 import { apiRequest, ApiError } from "@/lib/api-client";
-import { OfflineScrimExportDialog } from "./offline-scrim-export-dialog";
-import { PosterStandingEntry } from "./scrim-result-poster";
+import { ResultExportModal } from "@/components/result-export/result-export-modal";
+import type { ExportStanding } from "@/lib/result-export";
 
 const MAX_PLAYERS_PER_TEAM = 4;
 
@@ -81,6 +81,8 @@ interface StandingEntry {
   totalKills: number;
   matchesPlayed: number;
   booyahCount: number;
+  // Un point par match confirmé, chronologique — calcul Champion Rush de l'export.
+  matches?: { matchNumber: number; points: number; booyah: boolean }[];
 }
 
 function TeamBadge({ url, label }: { url: string | null; label: string }) {
@@ -144,19 +146,19 @@ function GlobalStandingsTable({ standings }: { standings: StandingEntry[] }) {
 // le placement brut mais le total de points (comme l'export global), trié
 // décroissant ; matchesPlayed=1 puisque ce n'est que ce match-là. Le mode
 // Champion Rush ne s'applique jamais ici (le seuil porte sur le cumul de tout
-// le scrim, pas sur une seule map) : championRushQualified/isChampion restent
-// undefined, voir offline-scrim-export-dialog (showToggle désactivé si
-// standingsOverride est fourni).
-function buildMapStandings(match: Match): PosterStandingEntry[] {
+// le scrim, pas sur une seule map) : le modal d'export ne le propose pas.
+function buildMapStandings(match: Match): ExportStanding[] {
   return match.teamResults
     .filter((tr): tr is TeamResult & { offlineScrimTeam: OfflineTeamOption } => !!tr.offlineScrimTeam)
     .map((tr) => ({
+      teamId: tr.offlineScrimTeam.id,
       name: tr.offlineScrimTeam.name,
       tag: tr.offlineScrimTeam.tag,
       logoUrl: tr.offlineScrimTeam.logoUrl,
       matchesPlayed: 1,
       totalKills: tr.totalKills,
       totalPlacementPoints: tr.placementPoints,
+      totalKillPoints: tr.killPoints,
       booyahCount: tr.placement === 1 ? 1 : 0,
       totalPoints: tr.points,
     }))
@@ -184,7 +186,7 @@ export function OfflineScrimResultsSection({
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
-  const [exportOverride, setExportOverride] = useState<{ standings: PosterStandingEntry[]; mapLabel: string } | null>(null);
+  const [exportOverride, setExportOverride] = useState<{ standings: ExportStanding[]; mapLabel: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Match | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -271,7 +273,7 @@ export function OfflineScrimResultsSection({
               disabled={standings.length === 0}
             >
               <ImageDown className="size-4" />
-              Exporter en image
+              Exporter les résultats
             </Button>
             <Button size="sm" onClick={() => setAddOpen(true)} disabled={teams.length === 0}>
               <Plus className="size-4" />
@@ -335,19 +337,21 @@ export function OfflineScrimResultsSection({
         ) : null}
       </CardContent>
 
-      <OfflineScrimExportDialog
+      <ResultExportModal
         open={exportOpen}
         onClose={() => {
           setExportOpen(false);
           setExportOverride(null);
         }}
-        scrimId={scrimId}
-        scrimName={scrimName}
-        scrimStartAt={scrimStartAt}
-        isChampionRush={isChampionRush}
-        championRushThreshold={championRushThreshold}
-        standingsOverride={exportOverride?.standings}
-        mapLabel={exportOverride?.mapLabel}
+        standings={exportOverride?.standings ?? standings}
+        title={scrimName}
+        subtitle={exportOverride ? `Map : ${exportOverride.mapLabel}` : ""}
+        matchLabel={exportOverride?.mapLabel}
+        dateIso={scrimStartAt}
+        fileBaseName={exportOverride ? `${scrimName}-${exportOverride.mapLabel}` : scrimName}
+        championRush={
+          exportOverride ? null : { defaultOn: !!isChampionRush, defaultThreshold: championRushThreshold ?? undefined }
+        }
       />
 
       <Sheet open={addOpen} onClose={() => setAddOpen(false)} title="Ajouter un résultat de match">

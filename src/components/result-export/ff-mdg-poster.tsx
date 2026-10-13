@@ -75,10 +75,10 @@ export interface PosterStandingEntry {
   totalPoints: number;
   // Un point par match confirmé, dans l'ordre chronologique (voir
   // offline-scrim-matches.repository.getStandings) — sert uniquement au
-  // calcul Champion Rush côté export (voir offline-scrim-export-dialog),
+  // calcul Champion Rush côté export (voir result-export-modal),
   // absent pour un export par map (buildMapStandings, un seul match).
   matches?: { matchNumber: number; points: number; booyah: boolean }[];
-  // Calculés côté appelant (voir offline-scrim-export-dialog) à partir du
+  // Calculés côté appelant (voir result-export-modal) à partir du
   // seuil du scrim — le composant n'a besoin de connaître que ces deux
   // booléens, jamais le seuil lui-même.
   championRushQualified?: boolean;
@@ -636,7 +636,7 @@ function HostPhoto({ photoDataUrl, width, height }: { photoDataUrl: string; widt
 // Rendu à taille fixe 1920×1080 (16:9) pour une capture PNG nette et
 // prévisible, quel que soit l'écran de l'admin qui exporte — le composant
 // n'est jamais affiché tel quel dans l'UI, seulement capturé (voir
-// offline-scrim-export-dialog.tsx qui l'affiche réduit via un transform
+// result-export-modal.tsx qui l'affiche réduit via un transform
 // CSS purement visuel, sans jamais changer sa taille réelle). Contrairement
 // au portrait, la hauteur ne grandit jamais avec le nombre d'équipes : voir
 // rowH plus bas, qui rétrécit les lignes au besoin pour toujours tout faire
@@ -782,7 +782,7 @@ export const ScrimResultPoster = forwardRef<HTMLDivElement, ScrimResultPosterPro
 // (pas de coupure en deux colonnes, la hauteur disponible n'a pas la même
 // contrainte qu'en paysage), photo agrandie à gauche débordant davantage
 // sous le tableau. Même charte, mêmes composants, juste une mise en page
-// différente (voir offline-scrim-export-dialog, qui propose les deux
+// différente (voir result-export-modal, qui propose les deux
 // formats en téléchargement séparé).
 export const POSTER_WIDTH_PORTRAIT = 1000;
 const WIDTH_PORTRAIT = POSTER_WIDTH_PORTRAIT;

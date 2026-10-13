@@ -5,7 +5,7 @@
 // une room unique, voir tournaments.service.setGroupRoom), donc pas de
 // double niveau d'onglets : juste "Résultat global" + un onglet par match.
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, Crown, ImagePlus, Loader2, Plus, Trash2, TriangleAlert, Trophy, UserPlus, X } from "lucide-react";
+import { CheckCircle2, Crown, ImageDown, ImagePlus, Loader2, Plus, Trash2, TriangleAlert, Trophy, UserPlus, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,8 @@ import { Sheet } from "@/components/ui/sheet";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TabList, TabButton } from "@/components/ui/tabs";
 import { apiRequest, ApiError } from "@/lib/api-client";
+import { ResultExportModal } from "@/components/result-export/result-export-modal";
+import { standingsFromMatch } from "@/lib/result-export";
 
 const MAX_PLAYERS_PER_TEAM = 4;
 
@@ -90,6 +92,8 @@ interface StandingEntry {
   totalKills: number;
   matchesPlayed: number;
   booyahCount: number;
+  // Un point par match confirmé, chronologique — calcul Champion Rush de l'export.
+  matches?: { matchNumber: number; points: number; booyah: boolean }[];
 }
 
 function Logo({ url, label }: { url: string | null; label: string }) {
@@ -149,13 +153,25 @@ function GlobalStandingsTable({ standings }: { standings: StandingEntry[] }) {
   );
 }
 
-export function GroupMatchesSection({ groupId }: { groupId: string }) {
+export function GroupMatchesSection({
+  groupId,
+  exportTitle,
+  exportSubtitle,
+  exportDateIso,
+}: {
+  groupId: string;
+  // Textes par défaut de l'export d'images (nom du tournoi, étape · groupe).
+  exportTitle: string;
+  exportSubtitle: string;
+  exportDateIso: string;
+}) {
   const [matches, setMatches] = useState<Match[]>([]);
   const [standings, setStandings] = useState<StandingEntry[]>([]);
   const [activeTab, setActiveTab] = useState<string>("global");
   const [rosterPlayers, setRosterPlayers] = useState<RosterPlayerOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Match | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -232,10 +248,21 @@ export function GroupMatchesSection({ groupId }: { groupId: string }) {
       <CardHeader className="gap-3">
         <div className="flex flex-row items-center justify-between">
           <CardTitle>Résultats de matchs</CardTitle>
-          <Button size="sm" onClick={() => setAddOpen(true)}>
-            <Plus className="size-4" />
-            Ajouter un résultat
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setExportOpen(true)}
+              disabled={activeMatch ? !activeMatch.teamResults.some((tr) => tr.team) : standings.length === 0}
+            >
+              <ImageDown className="size-4" />
+              <span className="hidden sm:inline">Exporter les résultats</span>
+            </Button>
+            <Button size="sm" onClick={() => setAddOpen(true)}>
+              <Plus className="size-4" />
+              Ajouter un résultat
+            </Button>
+          </div>
         </div>
 
         {!loading && (
@@ -294,6 +321,21 @@ export function GroupMatchesSection({ groupId }: { groupId: string }) {
           }}
         />
       </Sheet>
+
+      {/* Exporte ce qui est affiché : classement du groupe ou match sélectionné. */}
+      <ResultExportModal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        standings={activeMatch ? standingsFromMatch(activeMatch.teamResults) : standings}
+        title={exportTitle}
+        subtitle={
+          activeMatch ? `${exportSubtitle} · Match ${activeMatch.matchNumber} · ${MAP_LABEL[activeMatch.map]}` : exportSubtitle
+        }
+        matchLabel={activeMatch ? MAP_LABEL[activeMatch.map] : undefined}
+        dateIso={exportDateIso}
+        fileBaseName={`${exportTitle}-${exportSubtitle}${activeMatch ? `-match-${activeMatch.matchNumber}` : ""}`}
+        championRush={activeMatch ? null : {}}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}

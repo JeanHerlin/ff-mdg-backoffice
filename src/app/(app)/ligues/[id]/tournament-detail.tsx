@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { CheckCircle2, Crown, Dices, KeyRound, Loader2, Lock, Plus, Trash2, Trophy, Users } from "lucide-react";
+import { CheckCircle2, Crown, Dices, ImageDown, KeyRound, Loader2, Lock, Plus, Trash2, Trophy, Users } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,8 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TabList, TabButton } from "@/components/ui/tabs";
 import { apiRequest, ApiError } from "@/lib/api-client";
 import { GroupMatchesSection } from "./group-matches-section";
+import { ResultExportModal } from "@/components/result-export/result-export-modal";
+import type { ExportStanding } from "@/lib/result-export";
 
 type TournamentPhase = "UPCOMING" | "REGISTRATION_OPEN" | "REGISTRATION_CLOSED" | "IN_PROGRESS" | "COMPLETED";
 type StagePhase = "PENDING" | "DRAWN" | "ACTIVE" | "COMPLETED";
@@ -238,7 +240,14 @@ export function TournamentDetail() {
           </CardHeader>
           <CardContent>
             {activeStage && (
-              <StageDetail stage={activeStage} activeGroupId={activeGroupId} onSelectGroup={setActiveGroupId} onStageChanged={load} />
+              <StageDetail
+                tournamentName={tournament.name}
+                tournamentStartAt={tournament.startAt}
+                stage={activeStage}
+                activeGroupId={activeGroupId}
+                onSelectGroup={setActiveGroupId}
+                onStageChanged={load}
+              />
             )}
           </CardContent>
         </Card>
@@ -593,11 +602,15 @@ function SetChampionForm({
 }
 
 function StageDetail({
+  tournamentName,
+  tournamentStartAt,
   stage,
   activeGroupId,
   onSelectGroup,
   onStageChanged,
 }: {
+  tournamentName: string;
+  tournamentStartAt: string;
   stage: Stage;
   activeGroupId: string | null;
   onSelectGroup: (groupId: string) => void;
@@ -609,6 +622,16 @@ function StageDetail({
   const [starting, setStarting] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
+  // Classement cumulé de tous les groupes de l'étape — chargé à l'ouverture
+  // de l'export uniquement (vue d'ensemble, pas affichée ailleurs).
+  const [stageExport, setStageExport] = useState<ExportStanding[] | null | undefined>(undefined);
+
+  function openStageExport() {
+    setStageExport(null);
+    apiRequest<ExportStanding[]>(`/tournaments/stages/${stage.id}/standings`)
+      .then((data) => setStageExport(data ?? []))
+      .catch(() => setStageExport([]));
+  }
 
   async function draw() {
     setDrawing(true);
@@ -659,7 +682,13 @@ function StageDetail({
             ? "Étape finale — pas de qualification, le classement final désigne le champion."
             : `${stage.qualifiersPerGroup} équipe(s) qualifiée(s) par groupe à la clôture.`}
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {(stage.phase === "ACTIVE" || stage.phase === "COMPLETED") && (
+            <Button size="sm" variant="outline" onClick={openStageExport}>
+              <ImageDown className="size-4" />
+              Exporter le classement de l&apos;étape
+            </Button>
+          )}
           {stage.phase === "PENDING" && (
             <Button size="sm" onClick={() => setDrawOpen(true)}>
               <Dices className="size-4" />
@@ -700,11 +729,27 @@ function StageDetail({
             <div className="flex flex-col gap-4">
               <GroupTeamsCard group={activeGroup} allGroups={stage.groups} onChanged={onStageChanged} />
               <GroupRoomCard group={activeGroup} onChanged={onStageChanged} />
-              <GroupMatchesSection groupId={activeGroup.id} />
+              <GroupMatchesSection
+                groupId={activeGroup.id}
+                exportTitle={tournamentName}
+                exportSubtitle={`${stage.name} · ${activeGroup.name}`}
+                exportDateIso={activeGroup.scheduledAt ?? tournamentStartAt}
+              />
             </div>
           )}
         </>
       )}
+
+      <ResultExportModal
+        open={stageExport !== undefined}
+        onClose={() => setStageExport(undefined)}
+        standings={stageExport ?? null}
+        title={tournamentName}
+        subtitle={stage.name}
+        dateIso={stage.startedAt ?? tournamentStartAt}
+        fileBaseName={`${tournamentName}-${stage.name}`}
+        championRush={{}}
+      />
 
       <ConfirmDialog
         open={drawOpen}
