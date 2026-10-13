@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, ImageDown, ImagePlus, Loader2, Plus, Trash2, TriangleAlert, Trophy, UserPlus, X } from "lucide-react";
+import { CheckCircle2, ImageDown, ImagePlus, Loader2, Plus, Trash2, TriangleAlert, Trophy, UserPlus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,8 @@ import { Sheet } from "@/components/ui/sheet";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TabList, TabButton } from "@/components/ui/tabs";
 import { apiRequest, ApiError } from "@/lib/api-client";
+import { MatchCaptureInput } from "@/components/match-capture-input";
+import { CAPTURE_TOO_LARGE_MESSAGE } from "@/constants/ocr";
 import { ResultExportModal } from "@/components/result-export/result-export-modal";
 import type { ExportStanding } from "@/lib/result-export";
 
@@ -380,62 +382,6 @@ export function OfflineScrimResultsSection({
   );
 }
 
-function CaptureInput({
-  label,
-  hint,
-  file,
-  onChange,
-}: {
-  label: string;
-  hint: string;
-  file: File | null;
-  onChange: (file: File | null) => void;
-}) {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!file) {
-      setPreviewUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label className="text-sm font-medium text-foreground">{label}</label>
-      {previewUrl ? (
-        <div className="relative w-fit">
-          {/* eslint-disable-next-line @next/next/no-img-element -- aperçu local avant envoi, jamais une URL Cloudinary */}
-          <img src={previewUrl} alt={label} className="max-h-48 w-auto rounded-md border border-border object-contain" />
-          <button
-            type="button"
-            onClick={() => onChange(null)}
-            className="absolute -right-2 -top-2 flex size-6 items-center justify-center rounded-full bg-accent text-accent-foreground shadow"
-            aria-label="Retirer cette image"
-          >
-            <X className="size-3.5" />
-          </button>
-        </div>
-      ) : (
-        <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border bg-muted px-3 py-2.5 text-sm text-muted-foreground hover:border-primary hover:text-primary">
-          <ImagePlus className="size-4 shrink-0" />
-          Choisir une image
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            className="hidden"
-            onChange={(e) => onChange(e.target.files?.[0] ?? null)}
-          />
-        </label>
-      )}
-      <p className="text-xs text-muted-foreground">{hint}</p>
-    </div>
-  );
-}
-
 function AddMatchForm({ scrimId, onCreated }: { scrimId: string; onCreated: (match: Match) => void }) {
   const [mode, setMode] = useState<"captures" | "text">("captures");
   const [map, setMap] = useState<FreeFireMap>("BERMUDA");
@@ -474,7 +420,9 @@ function AddMatchForm({ scrimId, onCreated }: { scrimId: string; onCreated: (mat
       setError(
         err instanceof ApiError && err.message === "offline_scrim_matches.text_result_unreadable"
           ? "Ce fichier ne contient aucun résultat reconnaissable (format inattendu)."
-          : "Une erreur est survenue, réessayez."
+          : err instanceof ApiError && err.message === "validation.capture_too_large"
+            ? CAPTURE_TOO_LARGE_MESSAGE
+            : "Une erreur est survenue, réessayez."
       );
     } finally {
       setSubmitting(false);
@@ -502,13 +450,13 @@ function AddMatchForm({ scrimId, onCreated }: { scrimId: string; onCreated: (mat
 
       {mode === "captures" ? (
         <>
-          <CaptureInput
+          <MatchCaptureInput
             label="Capture 1 — les 10 premières équipes, sans coupure"
             hint="Le classement doit commencer à la 1ère place et aller jusqu'à la 10ème sans être coupé en plein milieu d'une ligne."
             file={capture1}
             onChange={setCapture1}
           />
-          <CaptureInput
+          <MatchCaptureInput
             label="Capture 2 — depuis la 11ème équipe jusqu'à la fin"
             hint="Le classement doit commencer au plus tard à la 11ème place et aller jusqu'à la dernière équipe sans être coupé."
             file={capture2}
