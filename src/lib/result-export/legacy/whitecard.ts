@@ -255,7 +255,7 @@ export function renderWhiteCardTwoColSixDesign(ranks, logos, champRush, tourneyL
 export function renderWhiteCardOneColumnDesign(ranks, logos, champRush, tourneyLogo, resultDateLabel, startIndex, pageLabel, sponsorLogos){
   sponsorLogos = sponsorLogos || [];
   startIndex = startIndex || 0;
-  const rowsPerPage = 12;
+  const rowsPerPage = PORTRAIT.on ? Infinity : 12; // portrait : toutes les équipes, hauteur variable
   const pageRanks = ranks.slice(0, rowsPerPage);
   const pageLogos = logos.slice(0, rowsPerPage);
   const numRows = Math.max(pageRanks.length, 1);
@@ -264,7 +264,7 @@ export function renderWhiteCardOneColumnDesign(ranks, logos, champRush, tourneyL
   const baseWidth = PORTRAIT.on ? PORTRAIT.width : 1100;
   const outerPad = 48;
   const headerH = 150;
-  const rowH = 92 + PORTRAIT.rowDelta;
+  const rowH = 92;
   const footerH = 66 + (sponsorLogos.length ? 56 : 0);
   const tableH = rowH*numRows;
   const photo = planPlayerPhoto(baseWidth, headerH, tableH, headerH-14, {left:22, overlap:0});

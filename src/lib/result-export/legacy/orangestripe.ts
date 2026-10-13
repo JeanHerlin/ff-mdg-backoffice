@@ -290,7 +290,7 @@ export function renderOrangeStripeTwoColSixDesign(ranks, logos, champRush, tourn
 export function renderOrangeStripeOneColumnDesign(ranks, logos, champRush, tourneyLogo, resultDateLabel, startIndex, pageLabel, sponsorLogos){
   sponsorLogos = sponsorLogos || [];
   startIndex = startIndex || 0;
-  const rowsPerPage = 12;
+  const rowsPerPage = PORTRAIT.on ? Infinity : 12; // portrait : toutes les équipes, hauteur variable
   const pageRanks = ranks.slice(0, rowsPerPage);
   const pageLogos = logos.slice(0, rowsPerPage);
   const numRows = Math.max(pageRanks.length, 1);
@@ -299,7 +299,7 @@ export function renderOrangeStripeOneColumnDesign(ranks, logos, champRush, tourn
   const cardPad = 44;
   const bandH = 100;
   const colHeadH = 44;
-  const rowH = 62 + PORTRAIT.rowDelta;
+  const rowH = 62;
   const footerH = 66 + (sponsorLogos.length ? 56 : 0);
   const headerH = bandH + 26;
   const tableH = colHeadH + rowH*numRows;

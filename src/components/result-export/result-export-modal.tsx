@@ -79,7 +79,10 @@ function readFileAsDataUrl(file: File): Promise<string | null> {
 
 function loadPreferences(): { theme?: ThemeChoice; format?: ResultFormat } {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}");
+    const prefs = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as { theme?: ThemeChoice; format?: ResultFormat };
+    // Un thème retiré depuis (ex. SGS) ne doit pas rester sélectionné.
+    const known = prefs.theme === FF_MDG_THEME || RESULT_THEMES.some((t) => t.id === prefs.theme);
+    return known ? prefs : {};
   } catch {
     return {};
   }

@@ -1,4 +1,4 @@
-import { CHAMPION_RUSH, EXPORT_TEXT, PHOTO, PORTRAIT, SGS_BANNER } from "./context";
+import { CHAMPION_RUSH, EXPORT_TEXT, PHOTO, PORTRAIT } from "./context";
 import { trimTransparentPadding } from "./legacy/canvas-utils";
 import { renderDailyScrimsDesign, renderDailyScrimsOneColumnDesign, renderDailyScrimsTwoColSixDesign } from "./legacy/dailyscrims";
 import { renderGlassDarkDesign, renderGlassDarkOneColumnDesign, renderGlassDarkTwoColSixDesign } from "./legacy/glassdark";
@@ -18,7 +18,6 @@ import {
   renderResultTableOneColumnDesign,
   renderResultTableTwoColSixDesign,
 } from "./legacy/resulttable-green";
-import { renderSgsDesign, renderSgsOneColumnDesign, renderSgsTwoColSixDesign } from "./legacy/sgs";
 import { renderSwissGridDesign, renderSwissGridOneColumnDesign, renderSwissGridTwoColSixDesign } from "./legacy/swissgrid";
 import { renderTerminalDesign, renderTerminalOneColumnDesign, renderTerminalTwoColSixDesign } from "./legacy/terminal";
 import { renderWhiteCardDesign, renderWhiteCardOneColumnDesign, renderWhiteCardTwoColSixDesign } from "./legacy/whitecard";
@@ -90,8 +89,7 @@ export type TableThemeId =
   | "redblack"
   | "terminal"
   | "goldluxury"
-  | "swissgrid"
-  | "sgs";
+  | "swissgrid";
 export type PodiumThemeId = "podiumcard" | "livepage";
 export type ResultThemeId = TableThemeId | PodiumThemeId;
 
@@ -120,7 +118,6 @@ export const RESULT_THEMES: ResultTheme[] = [
   { id: "terminal", label: "Terminal / CLI", kind: "table", swatch: ["#0C0C0C", "#28C840"] },
   { id: "goldluxury", label: "Gold Luxury", kind: "table", swatch: ["#1a1200", "#d4a72c"] },
   { id: "swissgrid", label: "Swiss Grid", kind: "table", swatch: ["#F4F1EC", "#111111"] },
-  { id: "sgs", label: "SGS Neon Sunset", kind: "table", swatch: ["#1a0628", "#ff4fa3"] },
   { id: "podiumcard", label: "Champion Card (Top 3)", kind: "podium", swatch: ["#0b1220", "#c7f08a"] },
   { id: "livepage", label: "Podium Page (Top 3)", kind: "podium", swatch: ["#0a0e16", "#2ecc71"] },
 ];
@@ -136,7 +133,7 @@ export function formatsFor(theme: ResultThemeId): ResultFormatOption[] {
   const portrait: ResultFormatOption = {
     id: "portrait",
     label: "Portrait",
-    hint: "1080×1350 — post Facebook / Instagram",
+    hint: "Une colonne, hauteur selon le nombre d'équipes",
     orientation: "portrait",
   };
   if (themeKind(theme) === "podium") {
@@ -183,11 +180,6 @@ const TABLE_RENDERERS: Record<TableThemeId, Record<"9+9" | "6+6" | "12", TableRe
   terminal: { "9+9": renderTerminalDesign, "6+6": renderTerminalTwoColSixDesign, "12": renderTerminalOneColumnDesign },
   goldluxury: { "9+9": renderGoldLuxuryDesign, "6+6": renderGoldLuxuryTwoColSixDesign, "12": renderGoldLuxuryOneColumnDesign },
   swissgrid: { "9+9": renderSwissGridDesign, "6+6": renderSwissGridTwoColSixDesign, "12": renderSwissGridOneColumnDesign },
-  sgs: {
-    "9+9": (a, b, c, d, e, f, g, h) => renderSgsDesign(a, b, c, d, e, f, g, h, 9, false),
-    "6+6": renderSgsTwoColSixDesign,
-    "12": renderSgsOneColumnDesign,
-  },
 };
 
 // Nombre maximum d'équipes par image — au-delà, l'export produit plusieurs
@@ -196,7 +188,9 @@ const PAGE_SIZES: Record<ResultFormat, number> = {
   "9+9": 18,
   "6+6": 12,
   "12": 12,
-  portrait: 12,
+  // Portrait : comme l'affiche FF MDG, toutes les équipes sur une seule image
+  // (voir renderResultPages, la taille réelle est le nombre d'équipes).
+  portrait: 0,
   landscape: 3,
 };
 
@@ -362,20 +356,18 @@ function prepareContext(opts: ResultExportOptions, standings: ExportStanding[]) 
 function resetContext() {
   PHOTO.img = null;
   PORTRAIT.on = false;
-  PORTRAIT.rowDelta = 0;
   CHAMPION_RUSH.on = false;
   CHAMPION_RUSH.championIds = new Set();
 }
 
-/**
- * Pose une image sur le canvas portrait 1080×1350 : fond = la même image
- * floutée en "cover" (raccord naturel quelle que soit la palette du thème),
- * puis l'image elle-même en "contain", centrée.
- */
-function composePortrait(source: HTMLCanvasElement): HTMLCanvasElement {
-  const { width: W, height: H } = PORTRAIT;
-  if (source.width === W && source.height === H) return source;
+// Podiums (Top 3) : pas de lignes à empiler, le portrait pose l'image
+// d'origine sur un canvas 1000×1250 — fond = la même image floutée en
+// "cover", puis l'image en "contain", centrée.
+const PODIUM_PORTRAIT_HEIGHT = 1250;
 
+function composePortrait(source: HTMLCanvasElement): HTMLCanvasElement {
+  const W = PORTRAIT.width;
+  const H = PODIUM_PORTRAIT_HEIGHT;
   const out = document.createElement("canvas");
   out.width = W;
   out.height = H;
@@ -397,26 +389,6 @@ function composePortrait(source: HTMLCanvasElement): HTMLCanvasElement {
   return out;
 }
 
-function renderTablePortrait(
-  render: TableRenderer,
-  args: TableArgs,
-  rowCount: number
-): HTMLCanvasElement {
-  PORTRAIT.on = true;
-  PORTRAIT.rowDelta = 0;
-  // 1er passage à la hauteur de ligne d'origine, puis on répartit l'écart
-  // avec 1350 px sur les lignes (borné pour garder des lignes lisibles) ; le
-  // reste éventuel est absorbé par composePortrait.
-  const first = render(...args);
-  const gap = PORTRAIT.height - first.height;
-  if (gap !== 0 && rowCount > 0) {
-    PORTRAIT.rowDelta = Math.max(-18, Math.min(60, Math.floor(gap / rowCount)));
-    const second = render(...args);
-    return composePortrait(second);
-  }
-  return composePortrait(first);
-}
-
 export interface RenderedPage {
   canvas: HTMLCanvasElement;
   label: string;
@@ -436,7 +408,6 @@ export async function renderResultPages(
     loadImage(opts.tourneyLogoSrc),
     loadImage(opts.photoSrc),
     Promise.all(opts.sponsorLogoSrcs.map((src) => loadImage(src))),
-    opts.theme === "sgs" ? loadImage("/export/sgs-banner.jpg").then((img) => (SGS_BANNER.img = img)) : null,
   ]);
   const sponsors = sponsorLogos.filter((img): img is HTMLImageElement => !!img);
   const ranks = ordered.map(toLegacyRank);
@@ -460,7 +431,7 @@ export async function renderResultPages(
     const renderers = TABLE_RENDERERS[theme] ?? TABLE_RENDERERS.ranktable;
     const layout = opts.format === "portrait" ? "12" : (opts.format as "9+9" | "6+6" | "12");
     const render = renderers[layout] ?? renderers["9+9"];
-    const pageSize = PAGE_SIZES[opts.format] ?? 18;
+    const pageSize = opts.format === "portrait" ? Math.max(ranks.length, 1) : (PAGE_SIZES[opts.format] ?? 18);
     const totalPages = Math.max(1, Math.ceil(ranks.length / pageSize));
 
     const pages: RenderedPage[] = [];
@@ -478,7 +449,8 @@ export async function renderResultPages(
         pageLabel,
         sponsors,
       ];
-      const canvas = opts.format === "portrait" ? renderTablePortrait(render, args, pageRanks.length) : render(...args);
+      PORTRAIT.on = opts.format === "portrait";
+      const canvas = render(...args);
       pages.push({ canvas, label: pageLabel });
     }
     return pages;

@@ -11,21 +11,15 @@ export const EXPORT_TEXT = {
   matchCount: 0,
 };
 
-// Format portrait 1080×1350 : les renderers "une colonne" lisent ces valeurs
-// pour fixer leur largeur et agrandir/réduire la hauteur des lignes (rowDelta)
-// afin que l'image remplisse la hauteur cible.
+// Format portrait — même principe que l'affiche "FF MDG Officiel" : largeur
+// fixe (1000px), une seule colonne, hauteur qui grandit avec le nombre
+// d'équipes (toutes sur une seule image). Lu par les renderers "une colonne".
 export const PORTRAIT = {
   on: false,
-  width: 1080,
-  height: 1350,
-  rowDelta: 0,
+  width: 1000,
 };
 
 export const PHOTO: { img: CanvasImageSource | null } = { img: null };
-
-// Bannière du thème "SGS Neon Sunset" — chargée à la demande par le moteur
-// (jamais au chargement du module : ce fichier est aussi évalué côté serveur).
-export const SGS_BANNER: { img: HTMLImageElement | null } = { img: null };
 
 export const CHAMPION_RUSH = {
   on: false,

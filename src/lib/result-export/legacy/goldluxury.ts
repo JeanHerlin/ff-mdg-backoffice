@@ -14,35 +14,50 @@ import { fitCanvasText } from "./podium";
    (rank / team / played / kills / placement / booyah / total) as every
    other theme — the podium simply surfaces it differently for the top 3. ---- */
 export function drawGoldPodiumTeam(ctx, cx, baseY, barW, barH, borderColor, textColor, team, logoImg, total, isActChamp){
-  // medal roundel with rank-colored ring
-  const medalR = 22;
+  // Empilement de haut en bas, écarts fixes : logo → nom → barre. Dans la
+  // version d'origine le nom était posé sur la même ligne que le bas du logo
+  // (chevauchement) et le logo du 1er remontait jusque dans l'en-tête.
+  const barY = baseY - barH;
+  const nameY = barY - 14;                 // ligne de base du nom, juste au-dessus de la barre
+  const medalR = 26;
+  const medalCy = nameY - 16 - 12 - medalR; // hauteur du texte (~16px) + 12px d'air
+
+  // médaillon du logo, anneau couleur du rang
   ctx.save();
   ctx.beginPath();
-  ctx.arc(cx, baseY-barH-medalR-52, medalR, 0, Math.PI*2);
+  ctx.arc(cx, medalCy, medalR, 0, Math.PI*2);
   ctx.closePath();
   ctx.fillStyle = "#1a1200";
   ctx.fill();
   ctx.clip();
   if(logoImg){
-    ctx.drawImage(logoImg, cx-medalR, baseY-barH-medalR-52-medalR, medalR*2, medalR*2);
+    ctx.drawImage(logoImg, cx-medalR, medalCy-medalR, medalR*2, medalR*2);
+  }else{
+    ctx.fillStyle = textColor;
+    ctx.font = "800 20px Rajdhani, 'Segoe UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText((team.name||"?").charAt(0).toUpperCase(), cx, medalCy+1);
+    ctx.textBaseline = "alphabetic";
   }
   ctx.restore();
   ctx.strokeStyle = borderColor;
   ctx.lineWidth = 2.5;
   ctx.beginPath();
-  ctx.arc(cx, baseY-barH-medalR-52, medalR, 0, Math.PI*2);
+  ctx.arc(cx, medalCy, medalR, 0, Math.PI*2);
   ctx.stroke();
 
   ctx.textAlign = "center";
   ctx.fillStyle = textColor;
-  ctx.font = "900 15px Rajdhani, 'Segoe UI', sans-serif";
-  ctx.fillText(fitCanvasText(ctx, team.name.toUpperCase(), barW+30), cx, baseY-barH-52);
+  ctx.font = "900 16px Rajdhani, 'Segoe UI', sans-serif";
+  const label = fitCanvasText(ctx, team.name.toUpperCase(), barW+30 - (isActChamp ? 24 : 0));
+  ctx.fillText(label, cx, nameY);
   if(isActChamp){
-    drawCanvasIcon(ctx, "trophy", cx+ctx.measureText(team.name.toUpperCase()).width/2+16, baseY-barH-58, 14, "#FFD700");
+    drawCanvasIcon(ctx, "trophy", cx+ctx.measureText(label).width/2+14, nameY-6, 14, "#FFD700");
   }
 
   // bar
-  const barX = cx-barW/2, barY = baseY-barH;
+  const barX = cx-barW/2;
   const barGrad = ctx.createLinearGradient(0,barY,0,baseY);
   barGrad.addColorStop(0, borderColor+"33");
   barGrad.addColorStop(1, "transparent");
@@ -118,7 +133,7 @@ export function renderGoldLuxuryDesign(ranks, logos, champRush, tourneyLogo, res
   const baseWidth = 1536;
   const outerPad = 44;
   const headerH = 160;
-  const podiumH = showPodium ? 300 : 0;
+  const podiumH = showPodium ? 340 : 0;
   const rowH = 40;
   const midGap = 72;
   const footerH = 70 + (sponsorLogos.length ? 56 : 0);
@@ -312,7 +327,7 @@ export function renderGoldLuxuryTwoColSixDesign(ranks, logos, champRush, tourney
 export function renderGoldLuxuryOneColumnDesign(ranks, logos, champRush, tourneyLogo, resultDateLabel, startIndex, pageLabel, sponsorLogos){
   sponsorLogos = sponsorLogos || [];
   startIndex = startIndex || 0;
-  const rowsPerPage = 12;
+  const rowsPerPage = PORTRAIT.on ? Infinity : 12; // portrait : toutes les équipes, hauteur variable
   const pageRanks = ranks.slice(0, rowsPerPage);
   const pageLogos = logos.slice(0, rowsPerPage);
   const showPodium = startIndex === 0;
@@ -325,8 +340,8 @@ export function renderGoldLuxuryOneColumnDesign(ranks, logos, champRush, tourney
   const baseWidth = PORTRAIT.on ? PORTRAIT.width : 1100;
   const outerPad = 48;
   const headerH = 150;
-  const podiumH = showPodium ? 260 : 0;
-  const rowH = 42 + PORTRAIT.rowDelta;
+  const podiumH = showPodium ? 310 : 0;
+  const rowH = 42;
   const footerH = 70 + (sponsorLogos.length ? 56 : 0);
   const restH = restRanks.length*rowH + 20;
   const photo = planPlayerPhoto(baseWidth, headerH, podiumH + restH, headerH-14, {left:8, overlap:12});

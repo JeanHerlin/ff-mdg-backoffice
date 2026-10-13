@@ -314,7 +314,7 @@ export function renderGlassDarkTwoColSixDesign(ranks, logos, champRush, tourneyL
 export function renderGlassDarkOneColumnDesign(ranks, logos, champRush, tourneyLogo, resultDateLabel, startIndex, pageLabel, sponsorLogos){
   sponsorLogos = sponsorLogos || [];
   startIndex = startIndex || 0;
-  const rowsPerPage = 12;
+  const rowsPerPage = PORTRAIT.on ? Infinity : 12; // portrait : toutes les équipes, hauteur variable
   const pageRanks = ranks.slice(0, rowsPerPage);
   const pageLogos = logos.slice(0, rowsPerPage);
   const numRows = Math.max(pageRanks.length, 1);
@@ -324,7 +324,7 @@ export function renderGlassDarkOneColumnDesign(ranks, logos, champRush, tourneyL
   const outerPad = 48;
   const headerH = 210;
   const colHeadH = 52;
-  const rowH = 68 + PORTRAIT.rowDelta;
+  const rowH = 68;
   const footerH = 70 + (sponsorLogos.length ? 56 : 0);
   const tableH = colHeadH + rowH*numRows;
   const photo = planPlayerPhoto(baseWidth, headerH, tableH, headerH-14, {overlap:12});

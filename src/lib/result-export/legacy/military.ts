@@ -305,7 +305,7 @@ export function renderMilitaryTwoColSixDesign(ranks, logos, champRush, tourneyLo
 export function renderMilitaryOneColumnDesign(ranks, logos, champRush, tourneyLogo, resultDateLabel, startIndex, pageLabel, sponsorLogos){
   sponsorLogos = sponsorLogos || [];
   startIndex = startIndex || 0;
-  const rowsPerPage = 12;
+  const rowsPerPage = PORTRAIT.on ? Infinity : 12; // portrait : toutes les équipes, hauteur variable
   const pageRanks = ranks.slice(0, rowsPerPage);
   const pageLogos = logos.slice(0, rowsPerPage);
   const numRows = Math.max(pageRanks.length, 1);
@@ -314,7 +314,7 @@ export function renderMilitaryOneColumnDesign(ranks, logos, champRush, tourneyLo
   const outerPad = 48;
   const headerH = 200;
   const colHeadH = 44;
-  const rowH = 66 + PORTRAIT.rowDelta;
+  const rowH = 66;
   const footerH = 76 + (sponsorLogos.length ? 56 : 0);
   const tableH = colHeadH + rowH*numRows;
   const photo = planPlayerPhoto(baseWidth, headerH, tableH, headerH-14, {overlap:12});
