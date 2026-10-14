@@ -499,6 +499,15 @@ function AddMatchForm({ scrimId, onCreated }: { scrimId: string; onCreated: (mat
 
 const UNASSIGNED_OPTION = { value: "", label: "Non assigné" };
 
+function describeError(err: unknown): string {
+  if (err instanceof ApiError) {
+    const fields = err.errors?.map((e) => `${e.field}: ${e.message}`).join(", ");
+    return `HTTP ${err.statusCode} — ${err.message}${fields ? ` (${fields})` : ""}${err.detail ? ` — ${err.detail}` : ""}`;
+  }
+  if (err instanceof Error) return `${err.name}: ${err.message}`;
+  return String(err);
+}
+
 function MatchCard({
   match,
   teams,
@@ -650,17 +659,24 @@ function TeamResultRow({
 }) {
   const [assigning, setAssigning] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [assignError, setAssignError] = useState<string | null>(null);
 
   const teamOptions = [UNASSIGNED_OPTION, ...teams.map((t) => ({ value: t.id, label: t.tag ? `${t.name} [${t.tag}]` : t.name }))];
 
   async function assignTeam(offlineScrimTeamId: string) {
     setAssigning(true);
+    setAssignError(null);
     try {
       const data = await apiRequest<{ teamResult: TeamResult }>(`/offline-scrim-matches/${matchId}/team-results/${teamResult.id}`, {
         method: "PATCH",
         body: { offlineScrimTeamId: offlineScrimTeamId || null },
       });
       if (data?.teamResult) onPatchTeamResult(data.teamResult);
+    } catch (err) {
+      // Affiché tel quel (diagnostic) : erreur API (code + clé + champs) ou
+      // exception JS côté navigateur, qui n'apparaît pas dans l'onglet Network.
+      console.error("[scrims externes] assignation d'équipe échouée", err);
+      setAssignError(describeError(err));
     } finally {
       setAssigning(false);
     }
@@ -694,6 +710,11 @@ function TeamResultRow({
           />
           {!teamResult.offlineScrimTeamId && teamResult.unmatchedLabel && (
             <span className="text-xs text-muted-foreground">détecté : &quot;{teamResult.unmatchedLabel}&quot;</span>
+          )}
+          {assignError && (
+            <span className="w-full break-all rounded-md bg-accent/10 px-2 py-1 font-mono text-xs text-accent">
+              Erreur : {assignError}
+            </span>
           )}
           <Badge variant="outline">{teamResult.totalKills} kills</Badge>
           <Badge variant="outline">{teamResult.placementPoints} pts placement</Badge>

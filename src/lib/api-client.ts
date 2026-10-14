@@ -8,11 +8,15 @@ export interface ApiFieldError {
 export class ApiError extends Error {
   statusCode: number;
   errors?: ApiFieldError[];
+  // Détail technique d'une erreur 500 — envoyé par le backend hors production
+  // uniquement (voir error.middleware), pour le diagnostic.
+  detail?: string;
 
-  constructor(statusCode: number, message: string, errors?: ApiFieldError[]) {
+  constructor(statusCode: number, message: string, errors?: ApiFieldError[], detail?: string) {
     super(message);
     this.statusCode = statusCode;
     this.errors = errors;
+    this.detail = detail;
   }
 }
 
@@ -22,6 +26,7 @@ interface Envelope<T> {
   message: string;
   data?: T;
   errors?: ApiFieldError[];
+  detail?: string;
   meta?: { page: number; perPage: number; total: number; totalPages: number };
 }
 
@@ -83,7 +88,7 @@ export async function apiRequestWithMeta<T>(path: string, options: RequestOption
   }
 
   if (!envelope.success) {
-    throw new ApiError(envelope.statusCode, envelope.message, envelope.errors);
+    throw new ApiError(envelope.statusCode, envelope.message, envelope.errors, envelope.detail);
   }
 
   return { data: envelope.data, meta: envelope.meta };
